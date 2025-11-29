@@ -64,11 +64,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth state
   useEffect(() => {
     let isMounted = true
+    let timeoutId: NodeJS.Timeout
 
     const initializeAuth = async () => {
       try {
-        // Get initial session - increased timeout to 15 seconds for slower connections
+        // Set a timeout to prevent hanging - will set loading to false after 5s
+        timeoutId = setTimeout(() => {
+          if (isMounted) {
+            console.warn('Auth initialization timed out, proceeding as unauthenticated')
+            setState({
+              user: null,
+              profile: null,
+              session: null,
+              isLoading: false,
+              isAuthenticated: false
+            })
+          }
+        }, 5000)
+
         const { data: { session }, error } = await supabase.auth.getSession()
+
+        // Clear the timeout since we got a response
+        clearTimeout(timeoutId)
 
         if (error) {
           console.error('Error getting session:', error)
@@ -97,6 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch (err) {
         console.error('Error initializing auth:', err)
+        clearTimeout(timeoutId)
         if (isMounted) {
           setState({
             user: null,
@@ -140,6 +158,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     return () => {
       isMounted = false
+      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, [fetchProfile])
@@ -173,10 +192,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// Default auth state for SSR/when context is not available
+const defaultAuthState: AuthContextType = {
+  user: null,
+  profile: null,
+  session: null,
+  isLoading: true,
+  isAuthenticated: false,
+  refreshProfile: async () => {},
+  signOut: async () => {}
+}
+
 export function useAuth() {
   const context = useContext(AuthContext)
+  // Return default state during SSR or when outside provider
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
+    return defaultAuthState
   }
   return context
 }

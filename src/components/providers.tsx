@@ -1,12 +1,23 @@
 'use client'
 
 import { AuthProvider } from '@/contexts/auth-context'
-import { type ReactNode } from 'react'
+import { type ReactNode, useState, useEffect } from 'react'
 
 interface ProvidersProps {
   children: ReactNode
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  // Render children without providers during SSR to avoid context issues
+  if (!mounted) {
+    return <>{children}</>
+  }
+
   return <AuthProvider>{children}</AuthProvider>
 }

@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { ReactNode, useEffect } from 'react'
 import Link from 'next/link'
 import type { Route } from 'next'
