@@ -1,0 +1,40 @@
+<svg width="240" height="240" viewBox="0 0 240 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Shield Background -->
+  <g id="shield">
+    <path d="M120 20 L180 50 L180 120 C180 160 150 190 120 210 C90 190 60 160 60 120 L60 50 L120 20 Z" 
+          fill="currentColor" 
+          class="logo-primary"/>
+    
+    <!-- Inner Shield Detail -->
+    <path d="M120 35 L165 58 L165 115 C165 145 145 170 120 185 C95 170 75 145 75 115 L75 58 L120 35 Z" 
+          fill="white" 
+          opacity="0.9"/>
+  </g>
+  
+  <!-- Emergency Cross -->
+  <g id="cross">
+    <rect x="105" y="70" width="30" height="80" rx="4" fill="currentColor" class="logo-accent"/>
+    <rect x="85" y="90" width="70" height="30" rx="4" fill="currentColor" class="logo-accent"/>
+  </g>
+  
+  <!-- Radio Waves (representing communication) -->
+  <g id="waves" opacity="0.6">
+    <path d="M155 85 Q165 85 165 95 Q165 105 155 105" 
+          stroke="currentColor" 
+          stroke-width="3" 
+          fill="none" 
+          class="logo-accent"/>
+    <path d="M165 75 Q180 75 180 95 Q180 115 165 115" 
+          stroke="currentColor" 
+          stroke-width="3" 
+          fill="none" 
+          class="logo-accent"/>
+  </g>
+  
+  <!-- Community Dots (representing connected people) -->
+  <g id="community">
+    <circle cx="95" cy="140" r="4" fill="currentColor" class="logo-accent"/>
+    <circle cx="120" cy="145" r="4" fill="currentColor" class="logo-accent"/>
+    <circle cx="145" cy="140" r="4" fill="currentColor" class="logo-accent"/>
+  </g>
+</svg>

@@ -1,0 +1,71 @@
+<svg width="240" height="240" viewBox="0 0 240 240" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Light mode colors -->
+    <style>
+      .logo-primary { fill: #1e293b; }
+      .logo-accent { fill: #ea580c; }
+      .logo-accent-stroke { stroke: #ea580c; }
+      .logo-bg { fill: white; }
+      
+      /* Dark mode support */
+      @media (prefers-color-scheme: dark) {
+        .logo-primary { fill: #e2e8f0; }
+        .logo-accent { fill: #fb923c; }
+        .logo-accent-stroke { stroke: #fb923c; }
+        .logo-bg { fill: #1e293b; }
+      }
+      
+      /* CSS custom property support */
+      .logo-primary { fill: var(--primary-800, #1e293b); }
+      .logo-accent { fill: var(--accent-600, #ea580c); }
+      .logo-accent-stroke { stroke: var(--accent-600, #ea580c); }
+    </style>
+  </defs>
+  
+  <!-- Shield Background -->
+  <g id="civil-defence-shield">
+    <!-- Outer shield -->
+    <path d="M120 20 L180 50 L180 120 C180 160 150 190 120 210 C90 190 60 160 60 120 L60 50 L120 20 Z" 
+          class="logo-primary"/>
+    
+    <!-- Inner shield detail -->
+    <path d="M120 35 L165 58 L165 115 C165 145 145 170 120 185 C95 170 75 145 75 115 L75 58 L120 35 Z" 
+          class="logo-bg"
+          opacity="0.9"/>
+  </g>
+  
+  <!-- Emergency Cross Symbol -->
+  <g id="emergency-cross">
+    <rect x="105" y="70" width="30" height="80" rx="4" class="logo-accent"/>
+    <rect x="85" y="90" width="70" height="30" rx="4" class="logo-accent"/>
+  </g>
+  
+  <!-- Communication Waves -->
+  <g id="communication-waves" opacity="0.6">
+    <path d="M155 85 Q165 85 165 95 Q165 105 155 105" 
+          class="logo-accent-stroke"
+          stroke-width="3" 
+          fill="none"/>
+    <path d="M165 75 Q180 75 180 95 Q180 115 165 115" 
+          class="logo-accent-stroke"
+          stroke-width="3" 
+          fill="none"/>
+  </g>
+  
+  <!-- Community Connection Dots -->
+  <g id="community-dots">
+    <circle cx="95" cy="140" r="4" class="logo-accent"/>
+    <circle cx="120" cy="145" r="4" class="logo-accent"/>
+    <circle cx="145" cy="140" r="4" class="logo-accent"/>
+    
+    <!-- Connection lines -->
+    <line x1="99" y1="140" x2="116" y2="145" 
+          class="logo-accent-stroke"
+          stroke-width="1.5" 
+          opacity="0.4"/>
+    <line x1="124" y1="145" x2="141" y2="140" 
+          class="logo-accent-stroke"
+          stroke-width="1.5" 
+          opacity="0.4"/>
+  </g>
+</svg>
