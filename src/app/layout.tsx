@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, JetBrains_Mono } from 'next/font/google'
+import { Noto_Sans, Noto_Sans_Mono } from 'next/font/google'
 import '@/styles/globals.css'
 import { Providers } from '@/components/providers'
 
 export const dynamic = 'force-dynamic'
 
-const inter = Inter({
+const notoSans = Noto_Sans({
   subsets: ['latin'],
   variable: '--font-sans',
-  display: 'swap'
+  display: 'swap',
+  weight: ['400', '500', '600', '700']
 })
 
-const jetbrainsMono = JetBrains_Mono({
+const notoSansMono = Noto_Sans_Mono({
   subsets: ['latin'],
   variable: '--font-mono',
   display: 'swap'
@@ -77,8 +78,12 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" sizes="any" />
         <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link
+          href="https://fonts.googleapis.com/icon?family=Material+Icons|Material+Icons+Outlined"
+          rel="stylesheet"
+        />
       </head>
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+      <body className={`${notoSans.variable} ${notoSansMono.variable} font-sans antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

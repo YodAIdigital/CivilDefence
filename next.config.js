@@ -10,6 +10,13 @@ const nextConfig = {
   experimental: {
     typedRoutes: true
   },
+  // Improve dev server stability
+  onDemandEntries: {
+    // Keep pages in memory for longer (5 minutes)
+    maxInactiveAge: 5 * 60 * 1000,
+    // Keep more pages in memory
+    pagesBufferLength: 5
+  },
   headers: async () => [
     {
       source: '/(.*)',

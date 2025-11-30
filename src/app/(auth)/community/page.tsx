@@ -267,9 +267,26 @@ export default function CommunityPage() {
                     </div>
                   </div>
                   <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" className="flex-1">
-                      View Details
-                    </Button>
+                    {community.memberRole === 'admin' ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => window.location.href = `/community/${community.id}/manage`}
+                      >
+                        <Crown className="mr-1 h-3 w-3" />
+                        Manage
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => window.location.href = `/community/${community.id}/contacts`}
+                      >
+                        View Contacts
+                      </Button>
+                    )}
                     {community.memberRole !== 'admin' && (
                       <Button
                         variant="ghost"

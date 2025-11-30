@@ -1,6 +1,7 @@
 'use client'
 
 import { AuthProvider } from '@/contexts/auth-context'
+import { CommunityProvider } from '@/contexts/community-context'
 import { type ReactNode, useState, useEffect } from 'react'
 
 interface ProvidersProps {
@@ -19,5 +20,9 @@ export function Providers({ children }: ProvidersProps) {
     return <>{children}</>
   }
 
-  return <AuthProvider>{children}</AuthProvider>
+  return (
+    <AuthProvider>
+      <CommunityProvider>{children}</CommunityProvider>
+    </AuthProvider>
+  )
 }

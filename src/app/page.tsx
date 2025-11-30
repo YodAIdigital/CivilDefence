@@ -3,31 +3,27 @@
 export const dynamic = 'force-dynamic'
 
 import Link from 'next/link'
-import { Shield, Users, Bell, Wifi } from 'lucide-react'
+import { Users, Bell, Wifi } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/auth-context'
+import { HomeLogo } from '@/components/custom/home-logo'
 
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth()
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gradient-to-b from-blue-50 to-blue-100 dark:from-slate-900 dark:to-slate-800">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 dark:bg-slate-900">
       <div className="container mx-auto px-4 py-16 text-center">
         {/* Logo Section */}
-        <div className="mb-8 flex justify-center">
-          <div className="flex h-24 w-24 items-center justify-center rounded-full bg-primary shadow-lg">
-            <Shield className="h-14 w-14 text-white" />
-          </div>
+        <div className="mb-8 flex flex-col items-center justify-center">
+          <HomeLogo />
         </div>
-
-        {/* Title */}
-        <h1 className="mb-4 text-4xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-5xl md:text-6xl">
-          Civil Defence Expo
-        </h1>
 
         {/* Subtitle */}
         <p className="mx-auto mb-12 max-w-2xl text-lg text-slate-600 dark:text-slate-300">
-          Community-based emergency coordination. Stay informed, stay prepared, stay connected.
+          Community-based emergency coordination.
+          <br />
+          Stay informed, stay prepared, stay connected.
         </p>
 
         {/* Feature Cards */}
@@ -42,7 +38,7 @@ export default function Home() {
               </div>
               <CardTitle className="text-lg">Emergency Information</CardTitle>
               <CardDescription>
-                Access critical civil defense information and emergency preparedness guides.
+                Access critical civil defense information and emergency response plans.
               </CardDescription>
             </CardHeader>
           </Card>

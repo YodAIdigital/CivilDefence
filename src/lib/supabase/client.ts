@@ -4,8 +4,8 @@ import type { Database } from '@/types/database'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-// Validate environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
+// Validate environment variables (only warn in development)
+if (typeof window !== 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
   console.error('Missing Supabase environment variables:', {
     url: !!supabaseUrl,
     key: !!supabaseAnonKey
@@ -18,18 +18,15 @@ if (!supabaseUrl || !supabaseAnonKey) {
  * Typed with Database schema for type safety
  */
 export const supabase: SupabaseClient<Database> = createClient<Database>(
-  supabaseUrl || '',
-  supabaseAnonKey || '',
+  supabaseUrl || 'https://placeholder.supabase.co',
+  supabaseAnonKey || 'placeholder-key',
   {
     auth: {
       autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: true
-    },
-    global: {
-      headers: {
-        'x-app-name': 'civil-defence-expo'
-      }
+      persistSession: typeof window !== 'undefined',
+      detectSessionInUrl: typeof window !== 'undefined',
+      storageKey: 'civil-defence-auth',
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined
     }
   }
 )

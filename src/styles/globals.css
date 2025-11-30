@@ -4,61 +4,76 @@
 
 /* ============================================
    CIVIL DEFENCE EXPO - GLOBAL STYLES
+   Modern Dashboard Design
    ============================================ */
 
 @layer base {
   :root {
-    /* ShadCN/ui Theme Variables */
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    /* Civil Defence Brand Colors
+       Primary: #000542 (dark navy)
+       Secondary: #313A64 (muted navy)
+       Accent: #FEB100 (gold/amber)
+       Text: #030626 (near black)
+       Light bg: #f2f2f4
+       White bg: #ffffff
+    */
+    --background: 240 8% 95%; /* #f2f2f4 */
+    --foreground: 235 81% 8%; /* #030626 */
+    --card: 0 0% 100%; /* #ffffff */
+    --card-foreground: 235 81% 8%; /* #030626 */
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 211 68% 36%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 32 100% 50%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 211 68% 36%;
-    --radius: 0.5rem;
+    --popover-foreground: 235 81% 8%;
+    --primary: 235 96% 13%; /* #000542 */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 231 34% 29%; /* #313A64 */
+    --secondary-foreground: 0 0% 100%;
+    --muted: 240 8% 95%; /* #f2f2f4 */
+    --muted-foreground: 231 34% 40%;
+    --accent: 42 100% 50%; /* #FEB100 */
+    --accent-foreground: 235 81% 8%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
+    --ring: 235 96% 13%;
+    --radius: 0.75rem;
 
     /* Semantic Colors */
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 0%;
+    --warning: 42 100% 50%; /* matches accent */
+    --warning-foreground: 235 81% 8%;
     --info: 199 89% 48%;
     --info-foreground: 0 0% 100%;
+
+    /* Sidebar */
+    --sidebar-bg: 0 0% 100%;
+    --sidebar-active: 235 96% 13%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 211 68% 46%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 32 100% 50%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 211 68% 46%;
+    --background: 235 81% 8%; /* #030626 */
+    --foreground: 240 8% 95%; /* #f2f2f4 */
+    --card: 235 96% 13%; /* #000542 */
+    --card-foreground: 240 8% 95%;
+    --popover: 235 96% 13%;
+    --popover-foreground: 240 8% 95%;
+    --primary: 42 100% 50%; /* #FEB100 in dark mode */
+    --primary-foreground: 235 81% 8%;
+    --secondary: 231 34% 29%; /* #313A64 */
+    --secondary-foreground: 240 8% 95%;
+    --muted: 231 34% 20%;
+    --muted-foreground: 240 8% 70%;
+    --accent: 42 100% 50%; /* #FEB100 */
+    --accent-foreground: 235 81% 8%;
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 231 34% 25%;
+    --input: 231 34% 25%;
+    --ring: 42 100% 50%;
+
+    --sidebar-bg: 235 96% 13%;
+    --sidebar-active: 42 100% 50%;
   }
 }
 

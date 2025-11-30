@@ -4,9 +4,9 @@ export const dynamic = 'force-dynamic'
 
 import { ReactNode } from 'react'
 import Link from 'next/link'
-import { Shield } from 'lucide-react'
 import { useAuth } from '@/contexts/auth-context'
 import { Button } from '@/components/ui/button'
+import { Logo } from '@/components/custom/logo'
 
 interface PublicLayoutProps {
   children: ReactNode
@@ -19,9 +19,8 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
         <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <Shield className="h-6 w-6 text-primary" />
-            <span className="text-xl font-bold text-primary">Civil Defence</span>
+          <Link href="/">
+            <Logo size="sm" />
           </Link>
           <nav className="flex items-center gap-4">
             <Link

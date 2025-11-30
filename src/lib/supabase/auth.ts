@@ -57,24 +57,30 @@ export async function signIn(
   password: string
 ): Promise<AuthResult<{ user: { id: string; email: string } }>> {
   try {
+    console.log('signIn: calling supabase.auth.signInWithPassword...')
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
+    console.log('signIn: got response', { data: !!data, error: error?.message })
 
     if (error) {
+      console.log('signIn: error returned', error.message)
       return { data: null, error: { message: error.message, status: error.status ?? undefined } }
     }
 
     if (data.user) {
+      console.log('signIn: success, user id:', data.user.id)
       return {
         data: { user: { id: data.user.id, email: data.user.email! } },
         error: null
       }
     }
 
+    console.log('signIn: no user in response')
     return { data: null, error: { message: 'Failed to sign in' } }
   } catch (err) {
+    console.error('signIn: caught exception', err)
     return {
       data: null,
       error: { message: err instanceof Error ? err.message : 'Unknown error' }

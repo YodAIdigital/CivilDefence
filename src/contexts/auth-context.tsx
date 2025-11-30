@@ -64,36 +64,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Initialize auth state
   useEffect(() => {
     let isMounted = true
-    let timeoutId: NodeJS.Timeout
 
-    const initializeAuth = async () => {
-      try {
-        // Set a timeout to prevent hanging - will set loading to false after 5s
-        timeoutId = setTimeout(() => {
-          if (isMounted) {
-            console.warn('Auth initialization timed out, proceeding as unauthenticated')
-            setState({
-              user: null,
-              profile: null,
-              session: null,
-              isLoading: false,
-              isAuthenticated: false
-            })
-          }
-        }, 5000)
+    // Subscribe to auth changes - this is the primary source of truth
+    const {
+      data: { subscription }
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session ? 'has session' : 'no session')
+      if (!isMounted) return
 
-        const { data: { session }, error } = await supabase.auth.getSession()
-
-        // Clear the timeout since we got a response
-        clearTimeout(timeoutId)
-
-        if (error) {
-          console.error('Error getting session:', error)
-        }
-
-        if (!isMounted) return
-
-        if (session?.user) {
+      if (session?.user) {
+        // Use setTimeout to avoid Supabase deadlock warning when calling other Supabase methods
+        setTimeout(async () => {
+          if (!isMounted) return
           const profile = await fetchProfile(session.user.id)
           if (!isMounted) return
           setState({
@@ -103,7 +85,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
             isLoading: false,
             isAuthenticated: true
           })
+        }, 0)
+      } else {
+        setState({
+          user: null,
+          profile: null,
+          session: null,
+          isLoading: false,
+          isAuthenticated: false
+        })
+      }
+    })
+
+    // Check for existing session on mount
+    const initializeAuth = async () => {
+      try {
+        console.log('Checking for existing session...')
+        const { data: { session }, error } = await supabase.auth.getSession()
+
+        console.log('Got session:', session ? 'yes' : 'no', error ? `error: ${error.message}` : '')
+
+        if (error) {
+          console.error('Error getting session:', error)
+        }
+
+        if (!isMounted) return
+
+        if (session?.user) {
+          console.log('User found, fetching profile...')
+          const profile = await fetchProfile(session.user.id)
+          if (!isMounted) return
+          console.log('Auth initialized: authenticated')
+          setState({
+            user: session.user,
+            profile,
+            session,
+            isLoading: false,
+            isAuthenticated: true
+          })
         } else {
+          console.log('Auth initialized: not authenticated')
           setState({
             user: null,
             profile: null,
@@ -114,7 +135,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch (err) {
         console.error('Error initializing auth:', err)
-        clearTimeout(timeoutId)
         if (isMounted) {
           setState({
             user: null,
@@ -129,36 +149,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     initializeAuth()
 
-    // Subscribe to auth changes
-    const {
-      data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (!isMounted) return
-
-      if (session?.user) {
-        const profile = await fetchProfile(session.user.id)
-        if (!isMounted) return
-        setState({
-          user: session.user,
-          profile,
-          session,
-          isLoading: false,
-          isAuthenticated: true
-        })
-      } else {
-        setState({
-          user: null,
-          profile: null,
-          session: null,
-          isLoading: false,
-          isAuthenticated: false
-        })
-      }
-    })
-
     return () => {
       isMounted = false
-      clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
   }, [fetchProfile])

@@ -1,0 +1,325 @@
+'use client'
+
+import { useState, useEffect, useCallback } from 'react'
+import { GoogleMap, MapMarker } from './google-map'
+import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
+import { useCommunity } from '@/contexts/community-context'
+import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp } from 'lucide-react'
+import type { CommunityMapPoint, MapPointType } from '@/types/database'
+import { MAP_POINT_TYPE_CONFIG } from '@/types/database'
+
+interface CommunityLocationsWidgetProps {
+  showHeader?: boolean
+  maxHeight?: string
+}
+
+export function CommunityLocationsWidget({
+  showHeader = true,
+  maxHeight = '400px',
+}: CommunityLocationsWidgetProps) {
+  const { user } = useAuth()
+  const { activeCommunity, communities } = useCommunity()
+  const [locations, setLocations] = useState<CommunityMapPoint[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [showAllLocations, setShowAllLocations] = useState(false)
+
+  const fetchLocations = useCallback(async () => {
+    if (!user) {
+      setLocations([])
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      setIsLoading(true)
+
+      // Get all community IDs the user is a member of
+      const communityIds = communities.map(c => c.id)
+
+      if (communityIds.length === 0) {
+        setLocations([])
+        setIsLoading(false)
+        return
+      }
+
+      // Fetch map points from all communities the user belongs to
+      // RLS will handle visibility filtering based on user's role
+      const supabaseAny = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            in: (col: string, vals: string[]) => {
+              eq: (col: string, val: boolean) => {
+                order: (col: string, opts: { ascending: boolean }) => Promise<{ data: CommunityMapPoint[] | null; error: Error | null }>
+              }
+            }
+          }
+        }
+      }
+
+      const { data, error } = await supabaseAny
+        .from('community_map_points')
+        .select('*')
+        .in('community_id', communityIds)
+        .eq('is_active', true)
+        .order('point_type', { ascending: true })
+
+      if (error) {
+        console.error('Error fetching locations:', error)
+        setLocations([])
+      } else {
+        setLocations(data || [])
+      }
+    } catch (err) {
+      console.error('Error fetching locations:', err)
+      setLocations([])
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user, communities])
+
+  useEffect(() => {
+    fetchLocations()
+  }, [fetchLocations])
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl bg-card border border-border p-6">
+        {showHeader && (
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <span className="material-icons text-green-500">map</span>
+            Community Locations
+          </h2>
+        )}
+        <div className="flex items-center justify-center py-8">
+          <span className="material-icons animate-spin text-2xl text-primary">sync</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (locations.length === 0) {
+    return null // Don't show widget if no locations
+  }
+
+  // Separate meeting points from other locations
+  const meetingPoints = locations.filter(l => l.point_type === 'meeting_point')
+  const referenceLocations = locations.filter(l => l.point_type !== 'meeting_point')
+
+  // Get community name for a location
+  const getCommunityName = (communityId: string) => {
+    return communities.find(c => c.id === communityId)?.name || 'Unknown'
+  }
+
+  // Create markers for the map using colors from config
+  const markers: MapMarker[] = locations.map(location => {
+    const config = MAP_POINT_TYPE_CONFIG[location.point_type]
+    const marker: MapMarker = {
+      id: location.id,
+      lat: location.lat,
+      lng: location.lng,
+      title: location.name,
+      color: config.color, // Use the hex color from config
+    }
+    if (location.address) {
+      marker.description = location.address
+    }
+    return marker
+  })
+
+  // Calculate map center based on all markers
+  const getMapCenter = (): { lat: number; lng: number } | undefined => {
+    if (locations.length === 0) return undefined
+
+    // If there's an active community with a meeting point, center on that
+    if (activeCommunity) {
+      const activeMeetingPoint = meetingPoints.find(m => m.community_id === activeCommunity.id)
+      if (activeMeetingPoint) {
+        return { lat: activeMeetingPoint.lat, lng: activeMeetingPoint.lng }
+      }
+    }
+
+    // Otherwise, center on first meeting point or first location
+    const firstMeetingPoint = meetingPoints[0]
+    if (firstMeetingPoint) {
+      return { lat: firstMeetingPoint.lat, lng: firstMeetingPoint.lng }
+    }
+
+    const firstLocation = locations[0]
+    if (firstLocation) {
+      return { lat: firstLocation.lat, lng: firstLocation.lng }
+    }
+
+    return undefined
+  }
+
+  const mapCenter = getMapCenter()
+
+  // Locations to display (limited or all)
+  const displayLimit = 5
+  const allLocationsToShow = [...meetingPoints, ...referenceLocations]
+  const locationsToDisplay = showAllLocations
+    ? allLocationsToShow
+    : allLocationsToShow.slice(0, displayLimit)
+
+  return (
+    <div className="rounded-xl bg-card border border-border overflow-hidden">
+      {showHeader && (
+        <div className="p-4 border-b border-border">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <span className="material-icons text-green-500">map</span>
+            Community Locations
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Key locations from your communities
+          </p>
+        </div>
+      )}
+
+      {/* Map */}
+      <div className="relative">
+        <GoogleMap
+          markers={markers}
+          height="300px"
+          {...(mapCenter && { center: mapCenter })}
+          zoom={markers.length === 1 ? 14 : 11}
+        />
+        {/* Dynamic Legend based on location types present */}
+        {(() => {
+          // Get unique point types that are present
+          const typeSet = new Set(locations.map(l => l.point_type))
+          const presentTypes: MapPointType[] = Array.from(typeSet)
+          return (
+            <div className="absolute bottom-2 left-2 bg-white/90 dark:bg-slate-800/90 rounded-lg px-3 py-2 text-xs shadow-sm">
+              <div className="flex flex-wrap items-center gap-3">
+                {presentTypes.map(type => {
+                  const config = MAP_POINT_TYPE_CONFIG[type]
+                  return (
+                    <span key={type} className="flex items-center gap-1">
+                      <span
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: config.color }}
+                      ></span>
+                      {config.label}
+                    </span>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
+      {/* Locations List */}
+      <div className="divide-y divide-border" style={{ maxHeight, overflowY: 'auto' }}>
+        {locationsToDisplay.map(location => {
+          const config = MAP_POINT_TYPE_CONFIG[location.point_type]
+          const isExpanded = expandedId === location.id
+          const isMeetingPoint = location.point_type === 'meeting_point'
+
+          return (
+            <div
+              key={location.id}
+              className={`${isMeetingPoint ? 'bg-green-50/50 dark:bg-green-950/20' : ''}`}
+            >
+              <div
+                className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => setExpandedId(isExpanded ? null : location.id)}
+              >
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-lg flex-shrink-0"
+                  style={{ backgroundColor: `${config.color}15` }}
+                >
+                  <span className="material-icons text-xl" style={{ color: config.color }}>
+                    {config.icon}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{location.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {config.label} • {getCommunityName(location.community_id)}
+                  </p>
+                </div>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${location.lat},${location.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Navigation className="h-3 w-3" />
+                  Directions
+                </a>
+                <span className="material-icons text-muted-foreground text-lg">
+                  {isExpanded ? 'expand_less' : 'expand_more'}
+                </span>
+              </div>
+
+              {isExpanded && (
+                <div className="px-3 pb-3 pl-16 space-y-2">
+                  {location.address && (
+                    <p className="text-sm text-muted-foreground flex items-start gap-2">
+                      <MapPin className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                      {location.address}
+                    </p>
+                  )}
+                  {location.description && (
+                    <p className="text-sm text-muted-foreground">
+                      {location.description}
+                    </p>
+                  )}
+                  {location.contact_phone && (
+                    <a
+                      href={`tel:${location.contact_phone}`}
+                      className="text-sm text-primary hover:underline flex items-center gap-2"
+                    >
+                      <Phone className="h-4 w-4" />
+                      {location.contact_phone}
+                    </a>
+                  )}
+                  {location.contact_email && (
+                    <a
+                      href={`mailto:${location.contact_email}`}
+                      className="text-sm text-primary hover:underline flex items-center gap-2"
+                    >
+                      <Mail className="h-4 w-4" />
+                      {location.contact_email}
+                    </a>
+                  )}
+                  {location.contact_name && (
+                    <p className="text-sm text-muted-foreground">
+                      Contact: {location.contact_name}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Show More/Less Button */}
+      {allLocationsToShow.length > displayLimit && (
+        <div className="p-3 border-t border-border">
+          <button
+            onClick={() => setShowAllLocations(!showAllLocations)}
+            className="w-full flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {showAllLocations ? (
+              <>
+                <ChevronUp className="h-4 w-4" />
+                Show Less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4" />
+                Show All {allLocationsToShow.length} Locations
+              </>
+            )}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
