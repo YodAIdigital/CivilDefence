@@ -20,8 +20,8 @@ const notoSansMono = Noto_Sans_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: 'Civil Defence Expo',
-    template: '%s | Civil Defence Expo'
+    default: 'CivilDefencePro',
+    template: '%s | CivilDefencePro'
   },
   description:
     'Community-based emergency coordination app providing critical civil defense information and community coordination capabilities.',
@@ -32,26 +32,26 @@ export const metadata: Metadata = {
     'disaster response',
     'emergency management'
   ],
-  authors: [{ name: 'Civil Defence Expo Team' }],
-  creator: 'Civil Defence Expo',
+  authors: [{ name: 'CivilDefencePro Team' }],
+  creator: 'CivilDefencePro',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Civil Defence Expo'
+    title: 'CivilDefencePro'
   },
   formatDetection: {
     telephone: true
   },
   openGraph: {
     type: 'website',
-    siteName: 'Civil Defence Expo',
-    title: 'Civil Defence Expo',
+    siteName: 'CivilDefencePro',
+    title: 'CivilDefencePro',
     description: 'Community-based emergency coordination app'
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Civil Defence Expo',
+    title: 'CivilDefencePro',
     description: 'Community-based emergency coordination app'
   }
 }

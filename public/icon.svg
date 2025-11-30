@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#1e5b9c"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- Dark blue outline shield -->
+  <path fill="#000542" stroke="#000542" stroke-width="1" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/>
+  <!-- Yellow inner shield -->
+  <path fill="#FEB100" d="M12 20s6-3.2 6-8V6.5l-6-2.25L6 6.5V12c0 4.8 6 8 6 8"/>
+</svg>

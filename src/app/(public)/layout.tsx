@@ -52,7 +52,7 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
       <main>{children}</main>
       <footer className="border-t bg-muted/50 py-8">
         <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
-          <p>&copy; {new Date().getFullYear()} Civil Defence Expo. All rights reserved.</p>
+          <p>&copy; {new Date().getFullYear()} CivilDefencePro. All rights reserved.</p>
         </div>
       </footer>
     </div>

@@ -39,7 +39,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, isLoading, profile, signOut } = useAuth()
-  const { communities, activeCommunity, setActiveCommunity } = useCommunity()
+  const { communities, activeCommunity, setActiveCommunity, isActiveCommunityAdmin } = useCommunity()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isCommunityDropdownOpen, setIsCommunityDropdownOpen] = useState(false)
 
@@ -206,18 +206,15 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             )
           })}
 
-          {/* Community Nav Item - Dynamic based on active community */}
+          {/* Community Nav Item - Link to community list for all users */}
           {(() => {
-            // If there's an active community, link to its manage page
-            // Otherwise, link to the community list page
-            const communityHref = activeCommunity
-              ? `/community/${activeCommunity.id}/manage`
-              : '/community'
-            const isCommunityActive = pathname?.startsWith('/community') ?? false
+            // Check if we're on the community list page (not manage page)
+            const isOnManagePage = activeCommunity && pathname === `/community/${activeCommunity.id}/manage`
+            const isCommunityActive = (pathname?.startsWith('/community') ?? false) && !isOnManagePage
 
             return (
               <Link
-                href={communityHref as Route}
+                href="/community"
                 className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                   isCommunityActive
                     ? 'bg-primary text-primary-foreground'
@@ -232,6 +229,36 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
                   <>
                     Community
                     {isCommunityActive && (
+                      <span className="material-icons ml-auto text-lg">arrow_forward</span>
+                    )}
+                  </>
+                )}
+              </Link>
+            )
+          })()}
+
+          {/* Manage Community - Only visible to community admins */}
+          {activeCommunity && isActiveCommunityAdmin && (() => {
+            const manageHref = `/community/${activeCommunity.id}/manage`
+            const isManageActive = pathname === manageHref
+
+            return (
+              <Link
+                href={manageHref as Route}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isManageActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                } ${isCollapsed ? 'justify-center px-0' : ''}`}
+                title={isCollapsed ? 'Manage Community' : undefined}
+              >
+                <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
+                  settings
+                </span>
+                {!isCollapsed && (
+                  <>
+                    Manage Community
+                    {isManageActive && (
                       <span className="material-icons ml-auto text-lg">arrow_forward</span>
                     )}
                   </>

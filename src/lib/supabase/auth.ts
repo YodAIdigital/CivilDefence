@@ -12,6 +12,34 @@ export interface AuthResult<T = void> {
 }
 
 /**
+ * Get the appropriate redirect URL for auth operations
+ * Uses NEXT_PUBLIC_APP_URL in production, or sanitizes the current origin in development
+ * Filters out invalid origins like 0.0.0.0
+ */
+function getAuthRedirectUrl(path: string): string {
+  if (typeof window === 'undefined') {
+    // Server-side: use configured APP_URL or fallback
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    return appUrl ? `${appUrl}${path}` : `http://localhost:3000${path}`
+  }
+
+  const origin = window.location.origin
+
+  // If origin contains 0.0.0.0, this is invalid for OAuth redirects
+  if (origin.includes('0.0.0.0')) {
+    // Try to use the configured APP_URL
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
+    if (appUrl && !appUrl.includes('0.0.0.0')) {
+      return `${appUrl}${path}`
+    }
+    // Fallback to localhost for local development
+    return `http://localhost:3000${path}`
+  }
+
+  return `${origin}${path}`
+}
+
+/**
  * Sign up with email and password
  */
 export async function signUp(
@@ -25,7 +53,7 @@ export async function signUp(
       password,
       options: {
         data: metadata ?? {},
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: getAuthRedirectUrl('/auth/callback')
       }
     })
 
@@ -95,15 +123,11 @@ export async function signInWithOAuth(
   provider: 'google' | 'github' | 'facebook'
 ): Promise<AuthResult> {
   try {
-    // Get the current window location origin to ensure redirects go back to the correct device/IP
-    // This fixes issues where mobile devices might be redirected to localhost/0.0.0.0
-    const redirectTo = typeof window !== 'undefined'
-      ? `${window.location.origin}/auth/callback`
-      : undefined
+    const redirectTo = getAuthRedirectUrl('/auth/callback')
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
-      options: redirectTo ? { redirectTo } : {}
+      options: { redirectTo }
     })
 
     if (error) {
@@ -145,7 +169,7 @@ export async function signOut(): Promise<AuthResult> {
 export async function resetPassword(email: string): Promise<AuthResult> {
   try {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`
+      redirectTo: getAuthRedirectUrl('/auth/reset-password')
     })
 
     if (error) {

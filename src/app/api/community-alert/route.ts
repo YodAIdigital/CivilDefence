@@ -269,6 +269,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Send SMS if requested
+    console.log('=== SMS SENDING DEBUG ===')
+    console.log('shouldSendSms:', shouldSendSms)
+    console.log('profiles count:', profiles?.length || 0)
+    console.log('profiles with phone:', profiles?.filter(p => p.phone).map(p => ({ id: p.id, phone: p.phone })) || [])
+
     if (shouldSendSms && profiles && profiles.length > 0) {
       const smsMessage = formatAlertSms({
         communityName: community.name,
@@ -276,28 +281,37 @@ export async function POST(request: NextRequest) {
         title,
         message,
       })
+      console.log('SMS message to send:', smsMessage)
 
       // Send SMS to all recipients with phone numbers
       for (const profile of profiles) {
         if (profile.phone) {
+          console.log(`Attempting to send SMS to ${profile.phone}...`)
           try {
             const result = await sendSms({
               to: profile.phone,
               message: smsMessage,
             })
+            console.log(`SMS result for ${profile.phone}:`, result)
 
             if (result.success) {
               smsSent++
             } else {
+              console.error(`SMS failed for ${profile.phone}:`, result.error)
               smsErrors.push(profile.phone)
             }
           } catch (err) {
             console.error(`Failed to send SMS to ${profile.phone}:`, err)
             smsErrors.push(profile.phone)
           }
+        } else {
+          console.log(`Profile ${profile.id} has no phone number`)
         }
       }
+    } else {
+      console.log('SMS sending skipped - shouldSendSms:', shouldSendSms, 'profiles:', profiles?.length || 0)
     }
+    console.log('=== END SMS DEBUG ===')
 
     // Update alert with actual sent counts
     if (alertId && (emailsSent > 0 || smsSent > 0)) {

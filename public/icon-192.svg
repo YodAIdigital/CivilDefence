@@ -1,4 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
-  <rect width="192" height="192" fill="#1e5b9c" rx="24"/>
-  <path fill="#ffffff" d="M96 164s56-28 56-70V45l-56-21-56 21v49c0 42 56 70 56 70" transform="translate(0, 4)"/>
+  <rect width="192" height="192" fill="#ffffff" rx="24"/>
+  <!-- Dark blue outline shield -->
+  <path fill="#000542" stroke="#000542" stroke-width="4" d="M96 164s56-28 56-70V45l-56-21-56 21v49c0 42 56 70 56 70" transform="translate(0, 4)"/>
+  <!-- Yellow inner shield -->
+  <path fill="#FEB100" d="M96 152s44-22 44-56V52l-44-16.5L52 52v44c0 34 44 56 44 56" transform="translate(0, 4)"/>
 </svg>

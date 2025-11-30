@@ -69,6 +69,12 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions): Prom
 }
 
 // Email templates
+// SVG shield logo as data URI for email compatibility
+const getShieldLogoDataUri = () => {
+  const shieldLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40"><path fill="#000542" stroke="#000542" stroke-width="1" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path fill="#FEB100" d="M12 20s6-3.2 6-8V6.5l-6-2.25L6 6.5V12c0 4.8 6 8 6 8"/></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(shieldLogoSvg)}`
+}
+
 export function getCommunityInvitationEmail(params: {
   communityName: string
   inviterName: string
@@ -78,7 +84,8 @@ export function getCommunityInvitationEmail(params: {
 }): { subject: string; html: string } {
   const { communityName, inviterName, role, inviteUrl, expiresAt } = params
 
-  const subject = `You've been invited to join ${communityName} on CivilDefence`
+  const subject = `You've been invited to join ${communityName} on CivilDefencePro`
+  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -99,12 +106,10 @@ export function getCommunityInvitationEmail(params: {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
                 <tr>
                   <td style="vertical-align: middle; padding-right: 12px;">
-                    <div style="width: 50px; height: 50px; position: relative;">
-                      <span style="font-size: 50px; color: #FEB100;">&#x1F6E1;</span>
-                    </div>
+                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: bold; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
                   </td>
                 </tr>
               </table>
@@ -121,7 +126,7 @@ export function getCommunityInvitationEmail(params: {
               </p>
 
               <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #374151;">
-                CivilDefence helps communities coordinate emergency preparedness and response. Join now to access emergency response plans, community events, and important contacts.
+                CivilDefencePro helps communities coordinate emergency preparedness and response. Join now to access emergency response plans, community events, and important contacts.
               </p>
 
               <!-- CTA Button -->
@@ -154,7 +159,7 @@ export function getCommunityInvitationEmail(params: {
           <tr>
             <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
               <p style="margin: 0; font-size: 13px; color: #6b7280;">
-                &copy; ${new Date().getFullYear()} CivilDefence. Community-based emergency coordination.
+                &copy; ${new Date().getFullYear()} <a href="https://CivilDefence.pro" style="color: #6b7280; text-decoration: none;">CivilDefencePro</a>. Community-based emergency coordination.
               </p>
             </td>
           </tr>
@@ -175,7 +180,8 @@ export function getWelcomeEmail(params: {
 }): { subject: string; html: string } {
   const { userName, loginUrl } = params
 
-  const subject = `Welcome to CivilDefence!`
+  const subject = `Welcome to CivilDefencePro!`
+  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -183,7 +189,7 @@ export function getWelcomeEmail(params: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Welcome to CivilDefence</title>
+  <title>Welcome to CivilDefencePro</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
   <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: #f3f4f6;">
@@ -196,10 +202,10 @@ export function getWelcomeEmail(params: {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
                 <tr>
                   <td style="vertical-align: middle; padding-right: 12px;">
-                    <span style="font-size: 50px; color: #FEB100;">&#x1F6E1;</span>
+                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: bold; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
                   </td>
                 </tr>
               </table>
@@ -212,7 +218,7 @@ export function getWelcomeEmail(params: {
               <h1 style="margin: 0 0 20px; font-size: 24px; color: #000542;">Welcome, ${userName}!</h1>
 
               <p style="margin: 0 0 20px; font-size: 16px; line-height: 1.6; color: #374151;">
-                Thank you for joining CivilDefence. You're now part of a community dedicated to emergency preparedness and coordination.
+                Thank you for joining CivilDefencePro. You're now part of a community dedicated to emergency preparedness and coordination.
               </p>
 
               <p style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #374151;">
@@ -244,7 +250,7 @@ export function getWelcomeEmail(params: {
           <tr>
             <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
               <p style="margin: 0; font-size: 13px; color: #6b7280;">
-                &copy; ${new Date().getFullYear()} CivilDefence. Community-based emergency coordination.
+                &copy; ${new Date().getFullYear()} <a href="https://CivilDefence.pro" style="color: #6b7280; text-decoration: none;">CivilDefencePro</a>. Community-based emergency coordination.
               </p>
             </td>
           </tr>
@@ -270,27 +276,25 @@ export function getCommunityAlertEmail(params: {
 
   const levelConfig = {
     info: {
-      label: 'General Announcement',
+      label: 'GENERAL ANNOUNCEMENT',
       color: '#22c55e',
       bgColor: '#dcfce7',
-      icon: '&#x2139;',
     },
     warning: {
-      label: 'Warning',
+      label: 'WARNING',
       color: '#f59e0b',
       bgColor: '#fef3c7',
-      icon: '&#x26A0;',
     },
     danger: {
-      label: 'Emergency',
+      label: 'EMERGENCY',
       color: '#ef4444',
       bgColor: '#fee2e2',
-      icon: '&#x1F6A8;',
     },
   }
 
   const config = levelConfig[alertLevel]
   const subject = `[${config.label}] ${title} - ${communityName}`
+  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -311,10 +315,10 @@ export function getCommunityAlertEmail(params: {
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
                 <tr>
                   <td style="vertical-align: middle; padding-right: 12px;">
-                    <span style="font-size: 50px; color: #FEB100;">&#x1F6E1;</span>
+                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: bold; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
                   </td>
                 </tr>
               </table>
@@ -324,16 +328,7 @@ export function getCommunityAlertEmail(params: {
           <!-- Alert Level Banner -->
           <tr>
             <td style="background-color: ${config.bgColor}; padding: 16px 30px; border-left: 4px solid ${config.color};">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                <tr>
-                  <td style="vertical-align: middle; width: 40px;">
-                    <span style="font-size: 24px;">${config.icon}</span>
-                  </td>
-                  <td style="vertical-align: middle;">
-                    <span style="font-size: 14px; font-weight: 600; color: ${config.color}; text-transform: uppercase; letter-spacing: 0.5px;">${config.label}</span>
-                  </td>
-                </tr>
-              </table>
+              <span style="font-size: 14px; font-weight: 600; color: ${config.color}; text-transform: uppercase; letter-spacing: 0.5px;">${config.label}</span>
             </td>
           </tr>
 
@@ -360,7 +355,7 @@ export function getCommunityAlertEmail(params: {
           <tr>
             <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
               <p style="margin: 0; font-size: 13px; color: #6b7280;">
-                &copy; ${new Date().getFullYear()} CivilDefence. Community-based emergency coordination.
+                &copy; ${new Date().getFullYear()} <a href="https://CivilDefence.pro" style="color: #6b7280; text-decoration: none;">CivilDefencePro</a>. Community-based emergency coordination.
               </p>
             </td>
           </tr>

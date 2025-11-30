@@ -150,8 +150,17 @@ export default function CommunityManagePage() {
   const [alertSendAppAlert, setAlertSendAppAlert] = useState(true)
   const [isSendingAlert, setIsSendingAlert] = useState(false)
 
-  // Collapsible section states
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+  // Collapsible section states - all collapsed by default
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
+    'send-alert': true,
+    'alert-history': true,
+    'members': true,
+    'contacts': true,
+    'about-roles': true,
+    'visibility': true,
+    'region': true,
+    'locations': true,
+  })
 
   const toggleSection = (sectionId: string) => {
     setCollapsedSections(prev => ({
