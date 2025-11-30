@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   { href: '/profile', icon: 'person', label: 'My Profile' },
   { href: '/guides', icon: 'menu_book', label: 'Response Plans' },
   { href: '/checklist', icon: 'checklist', label: 'Emergency Kit' },
-  { href: '/contacts', icon: 'contact_phone', label: 'Emergency Contacts' },
+  { href: '/contacts', icon: 'contact_phone', label: 'Contacts' },
 ]
 
 // Community nav item is handled separately to use dynamic href based on active community
@@ -106,7 +106,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       {/* Left Sidebar */}
       <aside
         className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-card transition-all duration-300 ${
-          isCollapsed ? 'w-16' : 'w-56'
+          isCollapsed ? 'w-16' : 'w-60'
         }`}
       >
         {/* Logo & Collapse Button */}
@@ -328,7 +328,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       {/* Main Content */}
       <div
         className={`flex flex-1 flex-col transition-all duration-300 ${
-          isCollapsed ? 'ml-16' : 'ml-56'
+          isCollapsed ? 'ml-16' : 'ml-60'
         }`}
       >
         {/* Page Content */}

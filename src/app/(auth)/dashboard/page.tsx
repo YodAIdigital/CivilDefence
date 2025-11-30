@@ -90,9 +90,9 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex gap-6">
+    <div className="flex flex-col xl:flex-row gap-6">
       {/* Main Content */}
-      <div className="flex-1 space-y-6">
+      <div className="flex-1 space-y-6 min-w-0">
         {/* Alerts & Messages Section */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -135,8 +135,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Right Sidebar - PDF Export, Weather, Calendar & Schedule */}
-      <aside className="hidden w-80 flex-shrink-0 xl:block">
-        <div className="sticky top-6 space-y-6">
+      <aside className="w-full xl:w-80 flex-shrink-0">
+        {/* Grid layout on smaller screens, stack on xl+ */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-4 xl:gap-6 xl:sticky xl:top-6">
           {/* PDF Export Widget */}
           <PDFExportWidget />
 

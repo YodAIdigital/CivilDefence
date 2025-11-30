@@ -10,6 +10,8 @@ import { useAuth } from '@/contexts/auth-context'
 import type { Community, CommunityEvent, CommunityMember, EventType, EventVisibility, Profile } from '@/types/database'
 import { EVENT_TYPE_CONFIG as eventTypeConfig, EVENT_VISIBILITY_CONFIG as visibilityConfig } from '@/types/database'
 
+type TabType = 'events' | 'members' | 'visibility'
+
 interface MemberWithProfile extends CommunityMember {
   profile: Profile
 }
@@ -422,6 +424,12 @@ export default function CommunityEventsPage() {
     )
   }
 
+  const tabs: { id: TabType; label: string; icon: string; href?: string }[] = [
+    { id: 'members', label: `${members.length} Members`, icon: 'people', href: `/community/${communityId}/manage` },
+    { id: 'events', label: 'Manage Events', icon: 'event' },
+    { id: 'visibility', label: community?.is_public ? 'Public' : 'Private', icon: community?.is_public ? 'public' : 'lock', href: `/community/${communityId}/manage` },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -430,22 +438,17 @@ export default function CommunityEventsPage() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <Link href="/community" className="hover:text-foreground">Communities</Link>
             <span className="material-icons text-sm">chevron_right</span>
-            <Link href={`/community/${communityId}/manage`} className="hover:text-foreground">{community?.name}</Link>
-            <span className="material-icons text-sm">chevron_right</span>
-            <span>Events</span>
+            <span>{community?.name}</span>
           </div>
-          <h1 className="text-2xl font-bold text-foreground">Community Events</h1>
+          <h1 className="text-2xl font-bold text-foreground">Manage Community</h1>
           <p className="mt-1 text-muted-foreground">
-            Schedule and manage events for your community.
+            Manage members, roles, and community settings.
           </p>
         </div>
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <span className="material-icons">add</span>
-          Create Event
-        </button>
+        <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+          <span className="material-icons text-lg">admin_panel_settings</span>
+          Community Admin
+        </div>
       </div>
 
       {error && (
@@ -459,6 +462,74 @@ export default function CommunityEventsPage() {
           {success}
         </div>
       )}
+
+      {/* Tab Navigation */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {tabs.map(tab => {
+          const isActive = tab.id === 'events'
+
+          const tabContent = (
+            <div className="flex items-center gap-3">
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                tab.id === 'events' ? 'bg-[#FEB100]/20' :
+                tab.id === 'members' ? 'bg-[#FEB100]/20' :
+                'bg-green-500/10'
+              }`}>
+                <span className={`material-icons text-2xl ${
+                  tab.id === 'events' ? 'text-[#FEB100]' :
+                  tab.id === 'members' ? 'text-[#FEB100]' :
+                  'text-green-500'
+                }`}>{tab.icon}</span>
+              </div>
+              <div>
+                <h3 className="font-semibold">{tab.label}</h3>
+                <p className="text-sm text-muted-foreground">
+                  {tab.id === 'events' && 'Schedule community events'}
+                  {tab.id === 'members' && 'Manage roles & permissions'}
+                  {tab.id === 'visibility' && 'Community visibility'}
+                </p>
+              </div>
+            </div>
+          )
+
+          if (tab.href) {
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href as `/community/${string}/manage`}
+                className="rounded-xl border border-border bg-card p-5 hover:border-primary/30 transition-colors"
+              >
+                {tabContent}
+              </Link>
+            )
+          }
+
+          return (
+            <button
+              key={tab.id}
+              className={`rounded-xl border p-5 text-left transition-colors ${
+                isActive
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-card hover:border-primary/30'
+              }`}
+            >
+              {tabContent}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Events Content Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">Community Events</h2>
+        <button
+          onClick={openCreateModal}
+          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          <span className="material-icons">add</span>
+          Create Event
+        </button>
+      </div>
 
       {/* Upcoming Events */}
       <div className="rounded-xl border border-border bg-card">

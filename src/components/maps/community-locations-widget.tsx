@@ -24,6 +24,7 @@ export function CommunityLocationsWidget({
   const [isLoading, setIsLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAllLocations, setShowAllLocations] = useState(false)
+  const [hiddenTypes, setHiddenTypes] = useState<Set<MapPointType>>(new Set())
 
   const fetchLocations = useCallback(async () => {
     if (!user) {
@@ -112,8 +113,24 @@ export function CommunityLocationsWidget({
     return communities.find(c => c.id === communityId)?.name || 'Unknown'
   }
 
-  // Create markers for the map using colors from config
-  const markers: MapMarker[] = locations.map(location => {
+  // Toggle visibility of a location type
+  const toggleType = (type: MapPointType) => {
+    setHiddenTypes(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(type)) {
+        newSet.delete(type)
+      } else {
+        newSet.add(type)
+      }
+      return newSet
+    })
+  }
+
+  // Filter locations based on hidden types
+  const visibleLocations = locations.filter(l => !hiddenTypes.has(l.point_type))
+
+  // Create markers for the map using colors from config (only visible types)
+  const markers: MapMarker[] = visibleLocations.map(location => {
     const config = MAP_POINT_TYPE_CONFIG[location.point_type]
     const marker: MapMarker = {
       id: location.id,
@@ -185,7 +202,7 @@ export function CommunityLocationsWidget({
           {...(mapCenter && { center: mapCenter })}
           zoom={markers.length === 1 ? 14 : 11}
         />
-        {/* Dynamic Legend based on location types present */}
+        {/* Dynamic Legend based on location types present - clickable to toggle */}
         {(() => {
           // Get unique point types that are present
           const typeSet = new Set(locations.map(l => l.point_type))
@@ -195,14 +212,22 @@ export function CommunityLocationsWidget({
               <div className="flex flex-wrap items-center gap-3">
                 {presentTypes.map(type => {
                   const config = MAP_POINT_TYPE_CONFIG[type]
+                  const isHidden = hiddenTypes.has(type)
                   return (
-                    <span key={type} className="flex items-center gap-1">
+                    <button
+                      key={type}
+                      onClick={() => toggleType(type)}
+                      className={`flex items-center gap-1 transition-opacity cursor-pointer hover:opacity-80 ${
+                        isHidden ? 'opacity-40' : ''
+                      }`}
+                      title={isHidden ? `Show ${config.label}` : `Hide ${config.label}`}
+                    >
                       <span
-                        className="w-3 h-3 rounded-full"
-                        style={{ backgroundColor: config.color }}
+                        className={`w-3 h-3 rounded-full ${isHidden ? 'ring-1 ring-offset-1 ring-gray-400' : ''}`}
+                        style={{ backgroundColor: isHidden ? '#9ca3af' : config.color }}
                       ></span>
-                      {config.label}
-                    </span>
+                      <span className={isHidden ? 'line-through' : ''}>{config.label}</span>
+                    </button>
                   )
                 })}
               </div>

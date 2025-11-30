@@ -5,7 +5,6 @@ import { useAuth } from '@/contexts/auth-context'
 import {
   fetchCurrentWeather,
   getWeatherIcon,
-  getWeatherBackground,
   type WeatherData
 } from '@/lib/weather'
 import type { ProfileExtended } from '@/types/database'
@@ -116,15 +115,12 @@ export function WeatherWidget() {
     )
   }
 
-  const bgGradient = getWeatherBackground(weather.condition, weather.isDaytime)
   const icon = getWeatherIcon(weather.condition, weather.isDaytime)
 
   return (
     <div className="rounded-2xl overflow-hidden shadow-sm border border-border">
-      {/* Weather header with gradient background and overlay for better text visibility */}
-      <div className={`relative bg-gradient-to-br ${bgGradient} p-5 text-white`}>
-        {/* Dark blue gradient overlay for better text contrast */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#000542]/70 via-[#313A64]/40 to-transparent pointer-events-none" />
+      {/* Weather header with dark blue gradient background */}
+      <div className="relative bg-gradient-to-br from-[#000542] via-[#1a2151] to-[#313A64] p-5 text-white">
         <div className="relative z-10">
           <p className="text-xs font-medium uppercase tracking-wide drop-shadow-sm">Current Weather</p>
           <div className="flex items-center justify-between mt-3">

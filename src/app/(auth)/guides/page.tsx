@@ -7,17 +7,27 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
+import { guideTemplates, GuideTemplate } from '@/data/guide-templates'
+import { GuideEditor } from '@/components/guides/guide-editor'
 import type { CommunityGuide, GuideSection, GuideEmergencyContact } from '@/types/database'
+
+type ViewMode = 'list' | 'view' | 'edit' | 'create'
 
 export default function GuidesPage() {
   const { user } = useAuth()
-  const { activeCommunity } = useCommunity()
+  const { activeCommunity, canManageActiveCommunity } = useCommunity()
 
   const [guides, setGuides] = useState<CommunityGuide[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState<string | null>(null)
   const [selectedGuide, setSelectedGuide] = useState<CommunityGuide | null>(null)
   const [activeTab, setActiveTab] = useState<'before' | 'during' | 'after' | 'supplies' | 'contacts'>('before')
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [showTemplates, setShowTemplates] = useState(false)
+
+  // Check if user can edit (admin or team_member)
+  const canEdit = canManageActiveCommunity
 
   const fetchGuides = useCallback(async () => {
     if (!user || !activeCommunity) {
@@ -29,14 +39,20 @@ export default function GuidesPage() {
     try {
       setIsLoading(true)
 
-      // Fetch only active guides for the active community
-      const { data: guidesData, error: guidesError } = await (supabase
+      // Fetch guides - admins see all, members see only active
+      const query = supabase
         .from('community_guides' as 'profiles')
         .select('*')
         .eq('community_id', activeCommunity.id)
-        .eq('is_active', true)
         .order('display_order', { ascending: true })
-        .order('created_at', { ascending: false }) as unknown as Promise<{ data: CommunityGuide[] | null; error: Error | null }>)
+        .order('created_at', { ascending: false })
+
+      // Only filter by is_active for non-admin users
+      if (!canEdit) {
+        (query as unknown as { eq: (col: string, val: boolean) => unknown }).eq('is_active', true)
+      }
+
+      const { data: guidesData, error: guidesError } = await (query as unknown as Promise<{ data: CommunityGuide[] | null; error: Error | null }>)
 
       if (guidesError) {
         console.warn('Could not fetch guides:', guidesError)
@@ -58,11 +74,164 @@ export default function GuidesPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [user, activeCommunity])
+  }, [user, activeCommunity, canEdit])
 
   useEffect(() => {
     fetchGuides()
   }, [fetchGuides])
+
+  // Create new guide from template
+  const createFromTemplate = async (template: GuideTemplate) => {
+    if (!user || !activeCommunity) return
+
+    const newGuide: Partial<CommunityGuide> = {
+      community_id: activeCommunity.id,
+      name: template.name,
+      description: template.description,
+      icon: template.icon,
+      color: template.color,
+      guide_type: template.type,
+      template_id: template.id,
+      sections: template.sections,
+      supplies: template.supplies,
+      emergency_contacts: template.emergencyContacts,
+      local_resources: [],
+      is_active: false,
+      display_order: guides.length,
+      created_by: user.id,
+    }
+
+    setSelectedGuide(newGuide as CommunityGuide)
+    setViewMode('edit')
+    setShowTemplates(false)
+  }
+
+  // Create blank custom guide
+  const createCustomGuide = () => {
+    if (!user || !activeCommunity) return
+
+    const newGuide: Partial<CommunityGuide> = {
+      community_id: activeCommunity.id,
+      name: '',
+      description: '',
+      icon: 'menu_book',
+      color: '#3b82f6',
+      guide_type: 'custom',
+      sections: { before: [], during: [], after: [] },
+      supplies: [],
+      emergency_contacts: [],
+      local_resources: [],
+      is_active: false,
+      display_order: guides.length,
+      created_by: user.id,
+    }
+
+    setSelectedGuide(newGuide as CommunityGuide)
+    setViewMode('edit')
+    setShowTemplates(false)
+  }
+
+  // Save guide
+  const handleSaveGuide = async (guideData: Partial<CommunityGuide>) => {
+    if (!user || !activeCommunity) throw new Error('Not authenticated')
+
+    const isNew = !guideData.id
+
+    const dataToSave = {
+      community_id: activeCommunity.id,
+      name: guideData.name,
+      description: guideData.description,
+      icon: guideData.icon,
+      color: guideData.color,
+      guide_type: guideData.guide_type,
+      template_id: guideData.template_id,
+      sections: guideData.sections,
+      supplies: guideData.supplies,
+      emergency_contacts: guideData.emergency_contacts,
+      custom_notes: guideData.custom_notes,
+      local_resources: guideData.local_resources,
+      is_active: guideData.is_active,
+      display_order: guideData.display_order ?? guides.length,
+      ...(isNew ? { created_by: user.id } : { updated_by: user.id }),
+    }
+
+    if (isNew) {
+      const { data, error } = await (supabase
+        .from('community_guides' as 'profiles')
+        .insert(dataToSave as never)
+        .select()
+        .single() as unknown as Promise<{ data: CommunityGuide | null; error: Error | null }>)
+
+      if (error) throw error
+      if (data) {
+        setGuides((prev) => [...prev, data])
+        setSuccess('Response plan created successfully!')
+      }
+    } else {
+      const { data, error } = await (supabase
+        .from('community_guides' as 'profiles')
+        .update(dataToSave as never)
+        .eq('id', guideData.id as string)
+        .select()
+        .single() as unknown as Promise<{ data: CommunityGuide | null; error: Error | null }>)
+
+      if (error) throw error
+      if (data) {
+        setGuides((prev) =>
+          prev.map((g) => (g.id === guideData.id ? data : g))
+        )
+        setSuccess('Response plan saved successfully!')
+      }
+    }
+
+    setViewMode('list')
+    setSelectedGuide(null)
+    setTimeout(() => setSuccess(null), 3000)
+  }
+
+  // Delete guide
+  const handleDeleteGuide = async (guideId: string) => {
+    if (!confirm('Are you sure you want to delete this response plan? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const { error } = await (supabase
+        .from('community_guides' as 'profiles')
+        .delete()
+        .eq('id', guideId) as unknown as Promise<{ error: Error | null }>)
+
+      if (error) throw error
+
+      setGuides((prev) => prev.filter((g) => g.id !== guideId))
+      setSuccess('Response plan deleted successfully!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error deleting guide:', err)
+      setError('Failed to delete response plan')
+    }
+  }
+
+  // Toggle guide active status
+  const toggleGuideActive = async (guide: CommunityGuide) => {
+    if (!user) return
+
+    try {
+      const { error } = await (supabase
+        .from('community_guides' as 'profiles')
+        .update({ is_active: !guide.is_active, updated_by: user.id } as never)
+        .eq('id', guide.id) as unknown as Promise<{ error: Error | null }>)
+
+      if (error) throw error
+
+      setGuides((prev) =>
+        prev.map((g) => (g.id === guide.id ? { ...g, is_active: !g.is_active } : g))
+      )
+    } catch (err) {
+      console.error('Error toggling guide:', err)
+      setError('Failed to update response plan')
+    }
+  }
 
   if (isLoading) {
     return (
@@ -72,19 +241,48 @@ export default function GuidesPage() {
     )
   }
 
+  // Edit mode for admins
+  if (viewMode === 'edit' && selectedGuide && canEdit) {
+    return (
+      <div className="h-[calc(100vh-12rem)]">
+        <GuideEditor
+          guide={selectedGuide}
+          onSave={handleSaveGuide}
+          onCancel={() => {
+            setViewMode('list')
+            setSelectedGuide(null)
+          }}
+          isNew={!selectedGuide.id}
+        />
+      </div>
+    )
+  }
+
   // If viewing a guide
-  if (selectedGuide) {
+  if (selectedGuide && viewMode === 'view') {
     return (
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <button
-            onClick={() => setSelectedGuide(null)}
+            onClick={() => {
+              setSelectedGuide(null)
+              setViewMode('list')
+            }}
             className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
           >
             <span className="material-icons">arrow_back</span>
             Back to Response Plans
           </button>
+          {canEdit && (
+            <button
+              onClick={() => setViewMode('edit')}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <span className="material-icons text-lg">edit</span>
+              Edit Plan
+            </button>
+          )}
         </div>
 
         {/* Guide Header */}
@@ -259,6 +457,78 @@ export default function GuidesPage() {
     )
   }
 
+  // Template selection modal for creating new guide
+  if (showTemplates) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Create New Response Plan</h1>
+            <p className="mt-1 text-muted-foreground">
+              Start from a template or create a custom response plan
+            </p>
+          </div>
+          <button
+            onClick={() => setShowTemplates(false)}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            <span className="material-icons">close</span>
+          </button>
+        </div>
+
+        {/* Custom Guide Option */}
+        <button
+          onClick={createCustomGuide}
+          className="w-full rounded-xl border-2 border-dashed border-primary/50 bg-primary/5 p-6 text-left transition-colors hover:border-primary hover:bg-primary/10"
+        >
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-[#000542]">
+              <span className="material-icons text-2xl text-white">add</span>
+            </div>
+            <div>
+              <h3 className="font-semibold text-lg">Create Custom Plan</h3>
+              <p className="text-sm text-muted-foreground">
+                Start from scratch and create a fully customized response plan
+              </p>
+            </div>
+          </div>
+        </button>
+
+        {/* Templates */}
+        <div>
+          <h2 className="text-lg font-semibold mb-4">Or start from a template</h2>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {guideTemplates.map((template) => (
+              <button
+                key={template.id}
+                onClick={() => createFromTemplate(template)}
+                className="rounded-xl border border-border bg-card p-5 text-left transition-all hover:border-primary/50 hover:shadow-md"
+              >
+                <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${template.color}`}>
+                  <span className="material-icons text-2xl text-white">{template.icon}</span>
+                </div>
+                <h3 className="mt-4 font-semibold">{template.name}</h3>
+                <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
+                  {template.description}
+                </p>
+                <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <span className="material-icons text-sm">article</span>
+                    {template.sections.before.length + template.sections.during.length + template.sections.after.length} sections
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="material-icons text-sm">inventory_2</span>
+                    {template.supplies.length} supplies
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // No community selected
   if (!activeCommunity) {
     return (
@@ -292,22 +562,43 @@ export default function GuidesPage() {
   if (guides.length === 0) {
     return (
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Emergency Response Plans</h1>
-          <p className="mt-1 text-muted-foreground">
-            View emergency response plans for {activeCommunity.name}.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Emergency Response Plans</h1>
+            <p className="mt-1 text-muted-foreground">
+              {canEdit
+                ? `Create and manage emergency response plans for ${activeCommunity.name}.`
+                : `View emergency response plans for ${activeCommunity.name}.`}
+            </p>
+          </div>
+          {canEdit && (
+            <button
+              onClick={() => setShowTemplates(true)}
+              className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <span className="material-icons text-lg">add</span>
+              Create Plan
+            </button>
+          )}
         </div>
 
         <div className="rounded-xl border border-border bg-card p-8 text-center">
           <span className="material-icons text-5xl text-muted-foreground">menu_book</span>
           <h2 className="mt-4 text-lg font-semibold">No Response Plans Available</h2>
           <p className="mt-2 text-muted-foreground">
-            No response plans have been published for {activeCommunity.name} yet.
+            {canEdit
+              ? 'Create your first response plan to help your community prepare.'
+              : `No response plans have been published for ${activeCommunity.name} yet.`}
           </p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Contact your community admin to add response plans.
-          </p>
+          {canEdit && (
+            <button
+              onClick={() => setShowTemplates(true)}
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              <span className="material-icons text-lg">add</span>
+              Create Plan
+            </button>
+          )}
         </div>
       </div>
     )
@@ -317,11 +608,24 @@ export default function GuidesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Emergency Response Plans</h1>
-        <p className="mt-1 text-muted-foreground">
-          Emergency response plans for {activeCommunity.name}.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Emergency Response Plans</h1>
+          <p className="mt-1 text-muted-foreground">
+            {canEdit
+              ? `Create and manage emergency response plans for ${activeCommunity.name}.`
+              : `Emergency response plans for ${activeCommunity.name}.`}
+          </p>
+        </div>
+        {canEdit && (
+          <button
+            onClick={() => setShowTemplates(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            <span className="material-icons text-lg">add</span>
+            Create Plan
+          </button>
+        )}
       </div>
 
       {error && (
@@ -330,18 +634,52 @@ export default function GuidesPage() {
         </div>
       )}
 
+      {success && (
+        <div className="rounded-lg border border-green-500/30 bg-green-50 p-4 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+          {success}
+        </div>
+      )}
+
       {/* Response Plan Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {guides.map((guide) => (
           <div
             key={guide.id}
-            className="rounded-xl border border-border bg-card p-5 transition-all hover:shadow-md"
+            className={`rounded-xl border bg-card p-5 transition-all hover:shadow-md ${
+              !guide.is_active && canEdit ? 'border-amber-500/50 opacity-75' : 'border-border'
+            }`}
           >
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-xl"
-              style={{ backgroundColor: guide.color?.startsWith('#') ? guide.color : '#3b82f6' }}
-            >
-              <span className="material-icons text-2xl text-white">{guide.icon}</span>
+            <div className="flex items-start justify-between">
+              <div
+                className="flex h-12 w-12 items-center justify-center rounded-xl"
+                style={{ backgroundColor: guide.color?.startsWith('#') ? guide.color : '#3b82f6' }}
+              >
+                <span className="material-icons text-2xl text-white">{guide.icon}</span>
+              </div>
+              {canEdit && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => toggleGuideActive(guide)}
+                    className={`rounded-lg p-1.5 transition-colors ${
+                      guide.is_active
+                        ? 'text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20'
+                        : 'text-muted-foreground hover:bg-muted'
+                    }`}
+                    title={guide.is_active ? 'Published' : 'Draft'}
+                  >
+                    <span className="material-icons text-xl">
+                      {guide.is_active ? 'visibility' : 'visibility_off'}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGuide(guide.id)}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    title="Delete"
+                  >
+                    <span className="material-icons text-xl">delete</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <h3 className="mt-4 font-semibold">{guide.name}</h3>
@@ -349,6 +687,13 @@ export default function GuidesPage() {
               <p className="mt-1 text-sm text-muted-foreground line-clamp-2">
                 {guide.description}
               </p>
+            )}
+
+            {!guide.is_active && canEdit && (
+              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                <span className="material-icons text-xs">visibility_off</span>
+                Draft
+              </span>
             )}
 
             <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
@@ -365,13 +710,30 @@ export default function GuidesPage() {
               </span>
             </div>
 
-            <button
-              onClick={() => setSelectedGuide(guide)}
-              className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg border border-border bg-background py-2 text-sm font-medium hover:bg-muted"
-            >
-              <span className="material-icons text-lg">visibility</span>
-              View Plan
-            </button>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => {
+                  setSelectedGuide(guide)
+                  setViewMode('view')
+                }}
+                className="flex-1 flex items-center justify-center gap-2 rounded-lg border border-border bg-background py-2 text-sm font-medium hover:bg-muted"
+              >
+                <span className="material-icons text-lg">visibility</span>
+                View
+              </button>
+              {canEdit && (
+                <button
+                  onClick={() => {
+                    setSelectedGuide(guide)
+                    setViewMode('edit')
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 rounded-lg bg-primary py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                >
+                  <span className="material-icons text-lg">edit</span>
+                  Edit
+                </button>
+              )}
+            </div>
           </div>
         ))}
       </div>

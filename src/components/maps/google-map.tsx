@@ -167,7 +167,7 @@ export function GoogleMap({
   if (error) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border bg-muted/50"
+        className="flex items-center justify-center border bg-muted/50"
         style={{ height }}
       >
         <div className="text-center text-muted-foreground">
@@ -181,7 +181,7 @@ export function GoogleMap({
   if (!isLoaded) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border bg-muted/50"
+        className="flex items-center justify-center border bg-muted/50"
         style={{ height }}
       >
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -192,7 +192,7 @@ export function GoogleMap({
   return (
     <div
       ref={mapRef}
-      className="rounded-lg overflow-hidden"
+      className="overflow-hidden"
       style={{ height, width: '100%' }}
     />
   )

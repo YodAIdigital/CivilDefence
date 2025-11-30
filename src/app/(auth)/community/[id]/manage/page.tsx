@@ -9,10 +9,10 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
-import { Search, UserPlus, X } from 'lucide-react'
+import { Search, UserPlus, X, Mail, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Community, Profile, CommunityRole, CommunityContact, CommunityGuide, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json } from '@/types/database'
+import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json } from '@/types/database'
 import { COMMUNITY_ROLE_CONFIG } from '@/types/database'
 
 interface CommunityMemberWithProfile {
@@ -24,7 +24,16 @@ interface CommunityMemberWithProfile {
   profile: Profile | null
 }
 
-type TabType = 'response_plans' | 'events' | 'members' | 'visibility'
+interface PendingInvitation {
+  id: string
+  email: string
+  role: CommunityRole
+  status: string
+  created_at: string
+  expires_at: string
+}
+
+type TabType = 'events' | 'members' | 'visibility'
 
 export default function CommunityManagePage() {
   const params = useParams()
@@ -33,6 +42,7 @@ export default function CommunityManagePage() {
 
   const [community, setCommunity] = useState<Community | null>(null)
   const [members, setMembers] = useState<CommunityMemberWithProfile[]>([])
+  const [pendingInvitations, setPendingInvitations] = useState<PendingInvitation[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -40,7 +50,6 @@ export default function CommunityManagePage() {
   const [updatingMemberId, setUpdatingMemberId] = useState<string | null>(null)
   const [contacts, setContacts] = useState<CommunityContact[]>([])
   const [isSavingContacts, setIsSavingContacts] = useState(false)
-  const [guides, setGuides] = useState<CommunityGuide[]>([])
   const [mapPoints, setMapPoints] = useState<CommunityMapPoint[]>([])
   const [isSavingMapPoints, setIsSavingMapPoints] = useState(false)
 
@@ -78,25 +87,6 @@ export default function CommunityManagePage() {
         setContacts(settings.contacts)
       } else {
         setContacts([])
-      }
-
-      // Fetch guides for reference
-      const { data: guidesData } = await (supabase
-        .from('community_guides' as 'profiles')
-        .select('*')
-        .eq('community_id', communityId)
-        .eq('is_active', true)
-        .order('display_order', { ascending: true }) as unknown as Promise<{ data: CommunityGuide[] | null; error: Error | null }>)
-
-      if (guidesData) {
-        const parsedGuides = guidesData.map((g: CommunityGuide) => ({
-          ...g,
-          sections: typeof g.sections === 'string' ? JSON.parse(g.sections as unknown as string) : g.sections,
-          supplies: typeof g.supplies === 'string' ? JSON.parse(g.supplies as unknown as string) : g.supplies,
-          emergency_contacts: typeof g.emergency_contacts === 'string' ? JSON.parse(g.emergency_contacts as unknown as string) : g.emergency_contacts,
-          local_resources: typeof g.local_resources === 'string' ? JSON.parse(g.local_resources as unknown as string) : g.local_resources,
-        }))
-        setGuides(parsedGuides)
       }
 
       // Fetch map points
@@ -161,6 +151,34 @@ export default function CommunityManagePage() {
       }))
 
       setMembers(membersWithProfiles)
+
+      // Fetch pending invitations
+      try {
+        const supabaseAny = supabase as unknown as {
+          from: (table: string) => {
+            select: (cols: string) => {
+              eq: (col: string, val: string) => {
+                eq: (col: string, val: string) => {
+                  order: (col: string, opts: { ascending: boolean }) => Promise<{ data: PendingInvitation[] | null; error: Error | null }>
+                }
+              }
+            }
+          }
+        }
+        const { data: invitationsData } = await supabaseAny
+          .from('community_invitations')
+          .select('*')
+          .eq('community_id', communityId)
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false })
+
+        if (invitationsData) {
+          setPendingInvitations(invitationsData)
+        }
+      } catch {
+        // Table might not exist yet
+        setPendingInvitations([])
+      }
     } catch (err) {
       console.error('Error fetching data:', err)
       setError('Failed to load community data')
@@ -245,59 +263,176 @@ export default function CommunityManagePage() {
       return
     }
 
+    if (!user) {
+      setError('You must be logged in to invite users')
+      return
+    }
+
     try {
       setIsInviting(true)
       setError(null)
 
-      // First, find the user by email
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('email', inviteEmail.toLowerCase().trim())
-        .single()
-
-      if (profileError || !profileData) {
-        setError('User not found. They must have an account first.')
-        return
-      }
+      const emailLower = inviteEmail.toLowerCase().trim()
 
       // Check if user is already a member
-      const { data: existingMember } = await supabase
-        .from('community_members')
+      const { data: existingProfile } = await supabase
+        .from('profiles')
         .select('id')
-        .eq('community_id', communityId)
-        .eq('user_id', profileData.id)
+        .eq('email', emailLower)
         .single()
 
-      if (existingMember) {
-        setError('This user is already a member of this community')
-        return
+      if (existingProfile) {
+        // Check if already a member
+        const { data: existingMember } = await supabase
+          .from('community_members')
+          .select('id')
+          .eq('community_id', communityId)
+          .eq('user_id', existingProfile.id)
+          .single()
+
+        if (existingMember) {
+          setError('This user is already a member of this community')
+          return
+        }
       }
 
-      // Add the user to the community
-      const { error: insertError } = await supabase
-        .from('community_members')
+      // Create invitation in database
+      const supabaseAny = supabase as unknown as {
+        from: (table: string) => {
+          insert: (data: unknown) => {
+            select: () => {
+              single: () => Promise<{ data: PendingInvitation | null; error: { message: string } | null }>
+            }
+          }
+        }
+      }
+
+      const { data: invitation, error: inviteError } = await supabaseAny
+        .from('community_invitations')
         .insert({
           community_id: communityId,
-          user_id: profileData.id,
-          role: inviteRole
+          email: emailLower,
+          role: inviteRole,
+          invited_by: user.id,
+          status: 'pending'
         })
+        .select()
+        .single()
 
-      if (insertError) throw insertError
+      if (inviteError) {
+        // Check if it's a duplicate invitation error
+        if (inviteError.message?.includes('unique') || inviteError.message?.includes('duplicate')) {
+          setError('An invitation has already been sent to this email address')
+          return
+        }
+        throw new Error(inviteError.message || 'Failed to create invitation')
+      }
 
-      // Refresh the members list
-      await fetchData()
+      // If user already exists, add them directly
+      if (existingProfile) {
+        const { error: memberError } = await supabase
+          .from('community_members')
+          .insert({
+            community_id: communityId,
+            user_id: existingProfile.id,
+            role: inviteRole
+          })
 
-      setSuccess(`${inviteEmail} has been added to the community as ${inviteRole}`)
+        if (memberError) throw memberError
+
+        // Update invitation status
+        if (invitation) {
+          await (supabase as unknown as {
+            from: (table: string) => {
+              update: (data: unknown) => {
+                eq: (col: string, val: string) => Promise<{ error: Error | null }>
+              }
+            }
+          })
+            .from('community_invitations')
+            .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+            .eq('id', invitation.id)
+        }
+
+        setSuccess(`${inviteEmail} has been added to the community as ${COMMUNITY_ROLE_CONFIG[inviteRole].label}`)
+      } else {
+        // User doesn't exist - send invitation email
+        if (invitation) {
+          try {
+            // Fetch the invitation with token
+            const { data: inviteWithToken } = await (supabase as unknown as {
+              from: (table: string) => {
+                select: (cols: string) => {
+                  eq: (col: string, val: string) => {
+                    single: () => Promise<{ data: { token: string } | null; error: Error | null }>
+                  }
+                }
+              }
+            })
+              .from('community_invitations')
+              .select('token')
+              .eq('id', invitation.id)
+              .single()
+
+            if (inviteWithToken?.token) {
+              // Send invitation email via API
+              await fetch('/api/invite', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  invitationId: invitation.id,
+                  communityId,
+                  email: emailLower,
+                  role: inviteRole,
+                  invitedBy: user.id,
+                  token: inviteWithToken.token,
+                }),
+              })
+            }
+          } catch (emailError) {
+            console.error('Failed to send invitation email:', emailError)
+            // Don't fail the invitation if email fails
+          }
+        }
+        setSuccess(`Invitation sent to ${inviteEmail}. They will be added as ${COMMUNITY_ROLE_CONFIG[inviteRole].label} when they create an account.`)
+      }
+
       setShowInviteModal(false)
       setInviteEmail('')
       setInviteRole('member')
-      setTimeout(() => setSuccess(null), 3000)
+      await fetchData()
+      setTimeout(() => setSuccess(null), 5000)
     } catch (err) {
       console.error('Error inviting user:', err)
-      setError('Failed to add user to community')
+      setError(err instanceof Error ? err.message : 'Failed to send invitation')
     } finally {
       setIsInviting(false)
+    }
+  }
+
+  const cancelInvitation = async (invitationId: string) => {
+    try {
+      const supabaseAny = supabase as unknown as {
+        from: (table: string) => {
+          update: (data: unknown) => {
+            eq: (col: string, val: string) => Promise<{ error: Error | null }>
+          }
+        }
+      }
+
+      const { error } = await supabaseAny
+        .from('community_invitations')
+        .update({ status: 'cancelled' })
+        .eq('id', invitationId)
+
+      if (error) throw error
+
+      await fetchData()
+      setSuccess('Invitation cancelled')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error cancelling invitation:', err)
+      setError('Failed to cancel invitation')
     }
   }
 
@@ -470,9 +605,8 @@ export default function CommunityManagePage() {
   }
 
   const tabs = [
-    { id: 'response_plans' as TabType, label: 'Response Plans', icon: 'menu_book', href: `/community/${communityId}/guides` },
-    { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events` },
     { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people' },
+    { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events` },
     { id: 'visibility' as TabType, label: community?.is_public ? 'Public' : 'Private', icon: community?.is_public ? 'public' : 'lock' },
   ]
 
@@ -510,21 +644,18 @@ export default function CommunityManagePage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {tabs.map(tab => {
           const isActive = activeTab === tab.id
-          const isLink = tab.id === 'response_plans' || tab.id === 'events'
 
           const tabContent = (
             <div className="flex items-center gap-3">
               <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                tab.id === 'response_plans' ? 'bg-primary/10' :
                 tab.id === 'events' ? 'bg-[#FEB100]/20' :
                 tab.id === 'members' ? 'bg-[#FEB100]/20' :
                 'bg-green-500/10'
               }`}>
                 <span className={`material-icons text-2xl ${
-                  tab.id === 'response_plans' ? 'text-primary' :
                   tab.id === 'events' ? 'text-[#FEB100]' :
                   tab.id === 'members' ? 'text-[#FEB100]' :
                   'text-green-500'
@@ -533,7 +664,6 @@ export default function CommunityManagePage() {
               <div>
                 <h3 className="font-semibold">{tab.label}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {tab.id === 'response_plans' && 'Select and customize emergency response plans'}
                   {tab.id === 'events' && 'Schedule community events'}
                   {tab.id === 'members' && `${members.filter(m => m.role === 'admin').length} admins, ${members.filter(m => m.role === 'team_member').length} team members`}
                   {tab.id === 'visibility' && 'Community visibility'}
@@ -542,11 +672,11 @@ export default function CommunityManagePage() {
             </div>
           )
 
-          if (isLink) {
+          if (tab.id === 'events') {
             return (
               <Link
                 key={tab.id}
-                href={tab.href!}
+                href={tab.href as `/community/${string}/events`}
                 className="rounded-xl border border-border bg-card p-5 hover:border-primary/30 transition-colors"
               >
                 {tabContent}
@@ -583,23 +713,79 @@ export default function CommunityManagePage() {
                     Manage member roles and permissions
                   </p>
                 </div>
-                <Button onClick={() => setShowInviteModal(true)} className="gap-2">
+              </div>
+
+              {/* Search Bar and Invite Button - Inline */}
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search members by name or email..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Button onClick={() => setShowInviteModal(true)} className="gap-2 shrink-0">
                   <UserPlus className="h-4 w-4" />
                   Invite Member
                 </Button>
               </div>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search members by name or email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
             </div>
+
+            {/* Pending Invitations */}
+            {pendingInvitations.length > 0 && (
+              <div className="border-b border-border bg-amber-50/50 dark:bg-amber-900/10">
+                <div className="px-4 py-2">
+                  <p className="text-xs font-medium text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                    <Clock className="h-3 w-3" />
+                    Pending Invitations ({pendingInvitations.length})
+                  </p>
+                </div>
+                <div className="divide-y divide-amber-200/50 dark:divide-amber-800/50">
+                  {pendingInvitations.map(invitation => {
+                    const roleConfig = COMMUNITY_ROLE_CONFIG[invitation.role as keyof typeof COMMUNITY_ROLE_CONFIG]
+                    return (
+                      <div
+                        key={invitation.id}
+                        className="flex items-center justify-between px-4 py-3"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                            <Mail className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{invitation.email}</span>
+                              {roleConfig && (
+                                <span
+                                  className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                  style={{
+                                    backgroundColor: `${roleConfig.color}20`,
+                                    color: roleConfig.color
+                                  }}
+                                >
+                                  {roleConfig.label}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              Invited {new Date(invitation.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => cancelInvitation(invitation.id)}
+                          className="text-xs text-muted-foreground hover:text-destructive"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="divide-y divide-border">
               {filteredMembers.length === 0 ? (
@@ -823,12 +1009,17 @@ export default function CommunityManagePage() {
                 <label className="block text-sm font-medium mb-1">Email Address</label>
                 <Input
                   type="email"
-                  placeholder="Enter user's email address"
+                  placeholder="Enter email address"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && inviteEmail.trim()) {
+                      handleInviteUser()
+                    }
+                  }}
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  The user must already have an account to be added
+                  An invitation will be sent to this email address
                 </p>
               </div>
 
@@ -870,10 +1061,13 @@ export default function CommunityManagePage() {
                   {isInviting ? (
                     <>
                       <span className="material-icons animate-spin text-lg mr-2">sync</span>
-                      Adding...
+                      Sending...
                     </>
                   ) : (
-                    'Add to Community'
+                    <>
+                      <Mail className="h-4 w-4 mr-2" />
+                      Send Invitation
+                    </>
                   )}
                 </Button>
               </div>
