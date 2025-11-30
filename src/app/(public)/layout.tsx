@@ -22,31 +22,13 @@ export default function PublicLayout({ children }: PublicLayoutProps) {
           <Link href="/">
             <Logo size="sm" />
           </Link>
-          <nav className="flex items-center gap-4">
-            <Link
-              href="/alerts"
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
-              Alerts
-            </Link>
-            {isLoading ? null : isAuthenticated ? (
+          {!isLoading && isAuthenticated && (
+            <nav className="flex items-center gap-4">
               <Button size="sm" asChild>
                 <Link href="/dashboard">Dashboard</Link>
               </Button>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  className="text-sm font-medium text-primary hover:text-primary/80"
-                >
-                  Sign In
-                </Link>
-                <Button size="sm" asChild>
-                  <Link href="/register">Get Started</Link>
-                </Button>
-              </>
-            )}
-          </nav>
+            </nav>
+          )}
         </div>
       </header>
       <main>{children}</main>

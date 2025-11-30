@@ -69,10 +69,12 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions): Prom
 }
 
 // Email templates
-// SVG shield logo as data URI for email compatibility
+// SVG shield logo as base64 data URI for better email client compatibility
 const getShieldLogoDataUri = () => {
   const shieldLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40"><path fill="#000542" stroke="#000542" stroke-width="1" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path fill="#FEB100" d="M12 20s6-3.2 6-8V6.5l-6-2.25L6 6.5V12c0 4.8 6 8 6 8"/></svg>`
-  return `data:image/svg+xml,${encodeURIComponent(shieldLogoSvg)}`
+  // Use base64 encoding for better email client support
+  const base64 = Buffer.from(shieldLogoSvg).toString('base64')
+  return `data:image/svg+xml;base64,${base64}`
 }
 
 export function getCommunityInvitationEmail(params: {
@@ -109,7 +111,7 @@ export function getCommunityInvitationEmail(params: {
                     <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
                   </td>
                 </tr>
               </table>
@@ -205,7 +207,7 @@ export function getWelcomeEmail(params: {
                     <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
                   </td>
                 </tr>
               </table>
@@ -318,7 +320,7 @@ export function getCommunityAlertEmail(params: {
                     <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
                   </td>
                   <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">DefencePro</span>
+                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
                   </td>
                 </tr>
               </table>
@@ -335,10 +337,6 @@ export function getCommunityAlertEmail(params: {
           <!-- Content -->
           <tr>
             <td style="padding: 40px 30px;">
-              <p style="margin: 0 0 8px; font-size: 14px; color: #6b7280;">
-                From <strong>${communityName}</strong>
-              </p>
-
               <h1 style="margin: 0 0 24px; font-size: 24px; color: #000542;">${title}</h1>
 
               <div style="margin: 0 0 30px; font-size: 16px; line-height: 1.6; color: #374151; white-space: pre-wrap;">${message}</div>
