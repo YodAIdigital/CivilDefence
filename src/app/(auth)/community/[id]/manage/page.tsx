@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
 import { RegionEditor } from '@/components/maps/region-editor'
-import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare } from 'lucide-react'
+import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon } from '@/types/database'
@@ -34,7 +34,7 @@ interface PendingInvitation {
   expires_at: string
 }
 
-type TabType = 'events' | 'members' | 'visibility'
+type TabType = 'alerts' | 'members' | 'events' | 'visibility'
 type AlertLevel = 'info' | 'warning' | 'danger'
 type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
 
@@ -104,7 +104,30 @@ export default function CommunityManagePage() {
   const [isSavingRegion, setIsSavingRegion] = useState(false)
 
   // Tab state
-  const [activeTab, setActiveTab] = useState<TabType>('members')
+  const [activeTab, setActiveTab] = useState<TabType>('alerts')
+
+  // Alert history state
+  interface AlertHistoryItem {
+    id: string
+    title: string
+    content: string
+    level: string
+    created_at: string
+    author_id: string
+    sent_via_email: boolean
+    sent_via_sms: boolean
+    sent_via_app: boolean
+    recipient_count: number
+    email_sent_count: number
+    sms_sent_count: number
+    recipient_group: string
+    author?: {
+      full_name: string | null
+      email: string | null
+    }
+  }
+  const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([])
+  const [_isLoadingAlertHistory, _setIsLoadingAlertHistory] = useState(false)
 
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
@@ -115,8 +138,8 @@ export default function CommunityManagePage() {
   const [inviteRole, setInviteRole] = useState<CommunityRole>('member')
   const [isInviting, setIsInviting] = useState(false)
 
-  // Alert modal state
-  const [showAlertModal, setShowAlertModal] = useState(false)
+  // Alert form state (modal removed - now using tab)
+  const [_showAlertModal, _setShowAlertModal] = useState(false)
   const [alertTitle, setAlertTitle] = useState('')
   const [alertMessage, setAlertMessage] = useState('')
   const [alertLevel, setAlertLevel] = useState<AlertLevel>('info')
@@ -126,6 +149,16 @@ export default function CommunityManagePage() {
   const [alertSendSms, setAlertSendSms] = useState(false)
   const [alertSendAppAlert, setAlertSendAppAlert] = useState(true)
   const [isSendingAlert, setIsSendingAlert] = useState(false)
+
+  // Collapsible section states
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({})
+
+  const toggleSection = (sectionId: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [sectionId]: !prev[sectionId]
+    }))
+  }
 
   const fetchData = useCallback(async () => {
     if (!user || !communityId) return
@@ -240,6 +273,58 @@ export default function CommunityManagePage() {
       } catch {
         // Table might not exist yet
         setPendingInvitations([])
+      }
+
+      // Fetch alert history
+      try {
+        const { data: alertsData } = await supabase
+          .from('alerts')
+          .select(`
+            id,
+            title,
+            content,
+            level,
+            created_at,
+            author_id,
+            sent_via_email,
+            sent_via_sms,
+            sent_via_app,
+            recipient_count,
+            email_sent_count,
+            sms_sent_count,
+            recipient_group
+          `)
+          .eq('community_id', communityId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+
+        if (alertsData && alertsData.length > 0) {
+          // Fetch author profiles
+          const authorIds = Array.from(new Set(alertsData.map(a => a.author_id)))
+          const { data: authorsData } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', authorIds)
+
+          const authorsMap = new Map(authorsData?.map(a => [a.id, a]) || [])
+
+          const alertsWithAuthors = alertsData.map(alert => ({
+            ...alert,
+            sent_via_email: alert.sent_via_email ?? false,
+            sent_via_sms: alert.sent_via_sms ?? false,
+            sent_via_app: alert.sent_via_app ?? true,
+            recipient_count: alert.recipient_count ?? 0,
+            email_sent_count: alert.email_sent_count ?? 0,
+            sms_sent_count: alert.sms_sent_count ?? 0,
+            recipient_group: alert.recipient_group ?? 'members',
+            author: authorsMap.get(alert.author_id) || null,
+          }))
+
+          setAlertHistory(alertsWithAuthors as AlertHistoryItem[])
+        }
+      } catch {
+        // Alert history columns might not exist yet
+        console.log('Could not fetch alert history')
       }
     } catch (err) {
       console.error('Error fetching data:', err)
@@ -546,8 +631,8 @@ export default function CommunityManagePage() {
         throw new Error(data.error || 'Failed to send alert')
       }
 
-      // Reset form and close modal
-      setShowAlertModal(false)
+      // Reset form
+      // Modal was removed - now using tab
       setAlertTitle('')
       setAlertMessage('')
       setAlertLevel('info')
@@ -783,34 +868,25 @@ export default function CommunityManagePage() {
   }
 
   const tabs = [
-    { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people' },
-    { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events` },
-    { id: 'visibility' as TabType, label: 'Response Map', icon: 'map' },
+    { id: 'alerts' as TabType, label: 'Send Alert', icon: 'campaign', description: 'Send alerts to members' },
+    { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people', description: `${members.filter(m => m.role === 'admin').length} admins, ${members.filter(m => m.role === 'team_member').length} team members` },
+    { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events`, description: 'Schedule community events' },
+    { id: 'visibility' as TabType, label: 'Response Map', icon: 'map', description: 'Community visibility' },
   ]
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link href="/community" className="hover:text-foreground">Communities</Link>
-            <span className="material-icons text-sm">chevron_right</span>
-            <span>{community?.name}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Manage Community</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage members, roles, and community settings.
-          </p>
+      <div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Link href="/community" className="hover:text-foreground">Communities</Link>
+          <span className="material-icons text-sm">chevron_right</span>
+          <span>{community?.name}</span>
         </div>
-        <Button
-          onClick={() => setShowAlertModal(true)}
-          size="lg"
-          className="gap-2 bg-[#FEB100] hover:bg-[#FEB100]/90 text-[#000542] font-semibold"
-        >
-          <Bell className="h-5 w-5" />
-          Send Alert
-        </Button>
+        <h1 className="text-2xl font-bold text-foreground">Manage Community</h1>
+        <p className="mt-1 text-muted-foreground">
+          Manage members, roles, and community settings.
+        </p>
       </div>
 
       {error && (
@@ -826,35 +902,38 @@ export default function CommunityManagePage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tabs.map(tab => {
           const isActive = activeTab === tab.id
+          const isLink = 'href' in tab && tab.href
+
+          const getIconColor = () => {
+            if (tab.id === 'alerts') return 'text-[#FEB100]'
+            if (tab.id === 'members') return 'text-[#FEB100]'
+            if (tab.id === 'events') return 'text-[#FEB100]'
+            return 'text-green-500'
+          }
+
+          const getIconBg = () => {
+            if (tab.id === 'alerts') return 'bg-[#FEB100]/20'
+            if (tab.id === 'members') return 'bg-[#FEB100]/20'
+            if (tab.id === 'events') return 'bg-[#FEB100]/20'
+            return 'bg-green-500/10'
+          }
 
           const tabContent = (
             <div className="flex items-center gap-3">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                tab.id === 'events' ? 'bg-[#FEB100]/20' :
-                tab.id === 'members' ? 'bg-[#FEB100]/20' :
-                'bg-green-500/10'
-              }`}>
-                <span className={`material-icons text-2xl ${
-                  tab.id === 'events' ? 'text-[#FEB100]' :
-                  tab.id === 'members' ? 'text-[#FEB100]' :
-                  'text-green-500'
-                }`}>{tab.icon}</span>
+              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${getIconBg()}`}>
+                <span className={`material-icons text-2xl ${getIconColor()}`}>{tab.icon}</span>
               </div>
               <div>
                 <h3 className="font-semibold">{tab.label}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {tab.id === 'events' && 'Schedule community events'}
-                  {tab.id === 'members' && `${members.filter(m => m.role === 'admin').length} admins, ${members.filter(m => m.role === 'team_member').length} team members`}
-                  {tab.id === 'visibility' && 'Community visibility'}
-                </p>
+                <p className="text-sm text-muted-foreground">{tab.description}</p>
               </div>
             </div>
           )
 
-          if (tab.id === 'events') {
+          if (isLink) {
             return (
               <Link
                 key={tab.id}
@@ -883,20 +962,355 @@ export default function CommunityManagePage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'alerts' && (
+        <div className="space-y-6">
+          {/* Send New Alert Section */}
+          <div className="rounded-xl border border-border bg-card">
+            <button
+              onClick={() => toggleSection('send-alert')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-[#FEB100]">campaign</span>
+                  Send New Alert
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Send alerts to community members via app, email, or SMS.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['send-alert'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['send-alert'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
+            <div className="p-6 space-y-6">
+              {/* Alert Level Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Alert Type</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(Object.keys(ALERT_LEVEL_CONFIG) as AlertLevel[]).map((level) => {
+                    const config = ALERT_LEVEL_CONFIG[level]
+                    const IconComponent = config.icon
+                    const isSelected = alertLevel === level
+                    return (
+                      <button
+                        key={level}
+                        onClick={() => setAlertLevel(level)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          isSelected
+                            ? `${config.bgColor} ${config.borderColor}`
+                            : 'border-border hover:border-primary/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
+                          <span className="font-medium" style={{ color: isSelected ? config.color : undefined }}>
+                            {config.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{config.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Recipients Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Send To</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(Object.keys(RECIPIENT_GROUP_CONFIG) as RecipientGroup[]).map((group) => {
+                    const config = RECIPIENT_GROUP_CONFIG[group]
+                    const isSelected = alertRecipientGroup === group
+                    return (
+                      <button
+                        key={group}
+                        onClick={() => setAlertRecipientGroup(group)}
+                        className={`p-3 rounded-lg border text-left transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/30'
+                        }`}
+                      >
+                        <span className="font-medium text-sm">{config.label}</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Member Selection (when specific is selected) */}
+              {alertRecipientGroup === 'specific' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Select Members ({alertSelectedMembers.length} selected)
+                  </label>
+                  <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
+                    {members.map((member) => {
+                      const isSelected = alertSelectedMembers.includes(member.user_id)
+                      return (
+                        <button
+                          key={member.id}
+                          onClick={() => toggleMemberSelection(member.user_id)}
+                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 border-b border-border last:border-b-0 ${
+                            isSelected ? 'bg-primary/5' : ''
+                          }`}
+                        >
+                          <div className={`flex h-5 w-5 items-center justify-center rounded border ${
+                            isSelected ? 'bg-primary border-primary' : 'border-border'
+                          }`}>
+                            {isSelected && <CheckCircle className="h-4 w-4 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">
+                              {member.profile?.full_name || member.profile?.email || 'Unknown'}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {member.profile?.email}
+                            </p>
+                          </div>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: `${COMMUNITY_ROLE_CONFIG[member.role]?.color}20`,
+                              color: COMMUNITY_ROLE_CONFIG[member.role]?.color
+                            }}
+                          >
+                            {COMMUNITY_ROLE_CONFIG[member.role]?.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Alert Title */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Title</label>
+                <Input
+                  placeholder="Enter alert title"
+                  value={alertTitle}
+                  onChange={(e) => setAlertTitle(e.target.value)}
+                />
+              </div>
+
+              {/* Alert Message */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Message</label>
+                <textarea
+                  placeholder="Enter your alert message..."
+                  value={alertMessage}
+                  onChange={(e) => setAlertMessage(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+              </div>
+
+              {/* Delivery Options */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Delivery Method</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendAppAlert}
+                      onChange={(e) => setAlertSendAppAlert(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div className="flex items-start gap-2">
+                      <Bell className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">App Alert</span>
+                        <p className="text-xs text-muted-foreground">Dashboard alerts</p>
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendEmail}
+                      onChange={(e) => setAlertSendEmail(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div className="flex items-start gap-2">
+                      <Mail className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">Email</span>
+                        <p className="text-xs text-muted-foreground">Email notification</p>
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendSms}
+                      onChange={(e) => setAlertSendSms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div className="flex items-start gap-2">
+                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">SMS</span>
+                        <p className="text-xs text-muted-foreground">Text message</p>
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Preview */}
+              {alertTitle && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Preview</label>
+                  <div className={`rounded-xl border p-4 ${ALERT_LEVEL_CONFIG[alertLevel].bgColor} ${ALERT_LEVEL_CONFIG[alertLevel].borderColor}`}>
+                    <div className="flex items-start gap-3">
+                      {(() => {
+                        const IconComponent = ALERT_LEVEL_CONFIG[alertLevel].icon
+                        return <IconComponent className="h-5 w-5 mt-0.5" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }} />
+                      })()}
+                      <div className="flex-1">
+                        <h4 className="font-semibold" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }}>
+                          {alertTitle}
+                        </h4>
+                        {alertMessage && (
+                          <p className="mt-1 text-sm whitespace-pre-wrap">{alertMessage}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Send Button */}
+              <div className="flex justify-end">
+                <Button
+                  onClick={handleSendAlert}
+                  disabled={isSendingAlert || !alertTitle.trim() || !alertMessage.trim() || (!alertSendEmail && !alertSendSms && !alertSendAppAlert)}
+                  className="gap-2"
+                  style={{
+                    backgroundColor: ALERT_LEVEL_CONFIG[alertLevel].color,
+                  }}
+                >
+                  {isSendingAlert ? (
+                    <>
+                      <span className="material-icons animate-spin text-lg">sync</span>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4" />
+                      Send Alert
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            </div>
+          </div>
+
+          {/* Alert History Section */}
+          <div className="rounded-xl border border-border bg-card">
+            <button
+              onClick={() => toggleSection('alert-history')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-muted-foreground">history</span>
+                  Alert History
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Previously sent alerts to this community.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['alert-history'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['alert-history'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
+            <div className="divide-y divide-border">
+              {alertHistory.length === 0 ? (
+                <div className="p-8 text-center">
+                  <span className="material-icons text-4xl text-muted-foreground">notifications_none</span>
+                  <p className="mt-2 text-muted-foreground">No alerts have been sent yet.</p>
+                </div>
+              ) : (
+                alertHistory.map((alert) => {
+                  const config = ALERT_LEVEL_CONFIG[alert.level as AlertLevel] || ALERT_LEVEL_CONFIG.info
+                  const IconComponent = config.icon
+                  const alertDate = new Date(alert.created_at)
+
+                  return (
+                    <div key={alert.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.bgColor}`}>
+                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-semibold">{alert.title}</h4>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {alertDate.toLocaleDateString()} {alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{alert.content}</p>
+                          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Sent by: <span className="font-medium text-foreground">{alert.author?.full_name || alert.author?.email || 'Unknown'}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              To: <span className="font-medium text-foreground">{alert.recipient_count} recipient{alert.recipient_count !== 1 ? 's' : ''}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {alert.sent_via_app && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                  <Bell className="h-3 w-3" />
+                                  App
+                                </span>
+                              )}
+                              {alert.sent_via_email && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                  <Mail className="h-3 w-3" />
+                                  {alert.email_sent_count > 0 ? `${alert.email_sent_count} emails` : 'Email'}
+                                </span>
+                              )}
+                              {alert.sent_via_sms && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                  <MessageSquare className="h-3 w-3" />
+                                  {alert.sms_sent_count > 0 ? `${alert.sms_sent_count} SMS` : 'SMS'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {activeTab === 'members' && (
         <>
           {/* Members List */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h2 className="text-lg font-semibold">Community Members</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Manage member roles and permissions
-                  </p>
-                </div>
+            <button
+              onClick={() => toggleSection('members')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="text-lg font-semibold">Community Members</h2>
+                <p className="text-sm text-muted-foreground">
+                  Manage member roles and permissions
+                </p>
               </div>
-
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['members'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['members'] ? 'max-h-0' : 'max-h-[3000px]'}`}>
+            <div className="border-b border-border p-4">
               {/* Search Bar and Invite Button - Inline */}
               <div className="flex items-center gap-3">
                 <div className="relative flex-1">
@@ -1049,52 +1463,71 @@ export default function CommunityManagePage() {
                 })
               )}
             </div>
+            </div>
           </div>
 
           {/* Key Contacts & Roles Section */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <span className="material-icons text-[#FEB100]">contact_phone</span>
-                Key Contacts & Roles
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Define key roles and contacts for your community. These will be visible to all members.
-              </p>
-            </div>
-            <div className="p-4">
-              <ContactsManager
-                contacts={contacts}
-                members={members}
-                onSave={saveContacts}
-                isSaving={isSavingContacts}
-              />
+            <button
+              onClick={() => toggleSection('contacts')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-[#FEB100]">contact_phone</span>
+                  Key Contacts & Roles
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Define key roles and contacts for your community. These will be visible to all members.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['contacts'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['contacts'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
+              <div className="p-4">
+                <ContactsManager
+                  contacts={contacts}
+                  members={members}
+                  onSave={saveContacts}
+                  isSaving={isSavingContacts}
+                />
+              </div>
             </div>
           </div>
 
           {/* Help Text */}
-          <div className="rounded-xl border border-border bg-card p-5">
-            <h3 className="flex items-center gap-2 font-semibold">
-              <span className="material-icons text-xl text-[#FEB100]">help</span>
-              About Roles
-            </h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Each member can have a different role in each community they belong to.
-            </p>
-            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.member.color }}>arrow_right</span>
-                <span><strong>Member:</strong> {COMMUNITY_ROLE_CONFIG.member.description}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.team_member.color }}>arrow_right</span>
-                <span><strong>Team Member:</strong> {COMMUNITY_ROLE_CONFIG.team_member.description}</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.admin.color }}>arrow_right</span>
-                <span><strong>Admin:</strong> {COMMUNITY_ROLE_CONFIG.admin.description}</span>
-              </li>
-            </ul>
+          <div className="rounded-xl border border-border bg-card">
+            <button
+              onClick={() => toggleSection('about-roles')}
+              className="w-full p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <h3 className="flex items-center gap-2 font-semibold">
+                <span className="material-icons text-xl text-[#FEB100]">help</span>
+                About Roles
+              </h3>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['about-roles'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['about-roles'] ? 'max-h-0' : 'max-h-[500px]'}`}>
+              <div className="px-5 pb-5">
+                <p className="text-sm text-muted-foreground">
+                  Each member can have a different role in each community they belong to.
+                </p>
+                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2">
+                    <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.member.color }}>arrow_right</span>
+                    <span><strong>Member:</strong> {COMMUNITY_ROLE_CONFIG.member.description}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.team_member.color }}>arrow_right</span>
+                    <span><strong>Team Member:</strong> {COMMUNITY_ROLE_CONFIG.team_member.description}</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="material-icons text-sm" style={{ color: COMMUNITY_ROLE_CONFIG.admin.color }}>arrow_right</span>
+                    <span><strong>Admin:</strong> {COMMUNITY_ROLE_CONFIG.admin.description}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
           </div>
         </>
       )}
@@ -1103,90 +1536,114 @@ export default function CommunityManagePage() {
         <div className="space-y-6">
           {/* Visibility Settings */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="text-lg font-semibold">Community Visibility</h2>
-              <p className="text-sm text-muted-foreground">
-                Control who can find and join your community
-              </p>
-            </div>
-            <div className="p-4">
-              <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
-                <div className="flex items-center gap-4">
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                    community?.is_public ? 'bg-green-500/10' : 'bg-amber-500/10'
-                  }`}>
-                    <span className={`material-icons text-2xl ${
-                      community?.is_public ? 'text-green-500' : 'text-amber-500'
+            <button
+              onClick={() => toggleSection('visibility')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="text-lg font-semibold">Community Visibility</h2>
+                <p className="text-sm text-muted-foreground">
+                  Control who can find and join your community
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['visibility'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['visibility'] ? 'max-h-0' : 'max-h-[500px]'}`}>
+              <div className="p-4">
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
+                  <div className="flex items-center gap-4">
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
+                      community?.is_public ? 'bg-green-500/10' : 'bg-amber-500/10'
                     }`}>
-                      {community?.is_public ? 'public' : 'lock'}
-                    </span>
+                      <span className={`material-icons text-2xl ${
+                        community?.is_public ? 'text-green-500' : 'text-amber-500'
+                      }`}>
+                        {community?.is_public ? 'public' : 'lock'}
+                      </span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold">{community?.is_public ? 'Public Community' : 'Private Community'}</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {community?.is_public
+                          ? 'Anyone can find and request to join this community'
+                          : 'Only invited users can join this community'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-semibold">{community?.is_public ? 'Public Community' : 'Private Community'}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {community?.is_public
-                        ? 'Anyone can find and request to join this community'
-                        : 'Only invited users can join this community'}
-                    </p>
-                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={toggleVisibility}
+                  >
+                    {community?.is_public ? 'Make Private' : 'Make Public'}
+                  </Button>
                 </div>
-                <Button
-                  variant="outline"
-                  onClick={toggleVisibility}
-                >
-                  {community?.is_public ? 'Make Private' : 'Make Public'}
-                </Button>
               </div>
             </div>
           </div>
 
           {/* Community Region Section */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <span className="material-icons text-blue-500">polyline</span>
-                Community Region
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Draw the area covered by your community. This region will be shown as an overlay on maps.
-              </p>
-            </div>
-            <div className="p-4">
-              <RegionEditor
-                initialPolygon={(community as Record<string, unknown>)?.region_polygon as RegionPolygon | null}
-                center={community?.latitude && community?.longitude
-                  ? { lat: community.latitude, lng: community.longitude }
-                  : undefined
-                }
-                onSave={saveRegion}
-                isSaving={isSavingRegion}
-              />
+            <button
+              onClick={() => toggleSection('region')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-blue-500">polyline</span>
+                  Community Region
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Draw the area covered by your community. This region will be shown as an overlay on maps.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['region'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['region'] ? 'max-h-0' : 'max-h-[1500px]'}`}>
+              <div className="p-4">
+                <RegionEditor
+                  initialPolygon={(community as Record<string, unknown>)?.region_polygon as RegionPolygon | null}
+                  center={community?.latitude && community?.longitude
+                    ? { lat: community.latitude, lng: community.longitude }
+                    : undefined
+                  }
+                  onSave={saveRegion}
+                  isSaving={isSavingRegion}
+                />
+              </div>
             </div>
           </div>
 
           {/* Locations Section */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <span className="material-icons text-green-500">map</span>
-                Community Locations
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Manage meeting points and key reference locations for your community. Control who can see each location.
-              </p>
-            </div>
-            <div className="p-4">
-              {user && (
-                <CommunityLocationsManager
-                  communityId={communityId}
-                  userId={user.id}
-                  points={mapPoints}
-                  onAdd={addMapPoint}
-                  onUpdate={updateMapPoint}
-                  onDelete={deleteMapPoint}
-                  isSaving={isSavingMapPoints}
-                />
-              )}
+            <button
+              onClick={() => toggleSection('locations')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-green-500">map</span>
+                  Community Locations
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Manage meeting points and key reference locations for your community. Control who can see each location.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['locations'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['locations'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
+              <div className="p-4">
+                {user && (
+                  <CommunityLocationsManager
+                    communityId={communityId}
+                    userId={user.id}
+                    points={mapPoints}
+                    onAdd={addMapPoint}
+                    onUpdate={updateMapPoint}
+                    onDelete={deleteMapPoint}
+                    isSaving={isSavingMapPoints}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1282,282 +1739,6 @@ export default function CommunityManagePage() {
         </div>
       )}
 
-      {/* Send Alert Modal */}
-      {showAlertModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border">
-            <div className="sticky top-0 bg-card border-b border-border p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
-                  <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold">Send Alert</h2>
-                  <p className="text-sm text-muted-foreground">Notify community members</p>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowAlertModal(false)
-                  setAlertTitle('')
-                  setAlertMessage('')
-                  setAlertLevel('info')
-                  setAlertRecipientGroup('members')
-                  setAlertSelectedMembers([])
-                }}
-                className="p-2 hover:bg-muted rounded-lg"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Alert Level Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-3">Alert Type</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {(Object.keys(ALERT_LEVEL_CONFIG) as AlertLevel[]).map((level) => {
-                    const config = ALERT_LEVEL_CONFIG[level]
-                    const IconComponent = config.icon
-                    const isSelected = alertLevel === level
-                    return (
-                      <button
-                        key={level}
-                        onClick={() => setAlertLevel(level)}
-                        className={`p-4 rounded-xl border-2 text-left transition-all ${
-                          isSelected
-                            ? `${config.bgColor} ${config.borderColor}`
-                            : 'border-border hover:border-primary/30'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
-                          <span className="font-medium" style={{ color: isSelected ? config.color : undefined }}>
-                            {config.label}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">{config.description}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Recipients Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-3">Send To</label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {(Object.keys(RECIPIENT_GROUP_CONFIG) as RecipientGroup[]).map((group) => {
-                    const config = RECIPIENT_GROUP_CONFIG[group]
-                    const isSelected = alertRecipientGroup === group
-                    return (
-                      <button
-                        key={group}
-                        onClick={() => setAlertRecipientGroup(group)}
-                        className={`p-3 rounded-lg border text-left transition-all ${
-                          isSelected
-                            ? 'border-primary bg-primary/5'
-                            : 'border-border hover:border-primary/30'
-                        }`}
-                      >
-                        <span className="font-medium text-sm">{config.label}</span>
-                        <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Member Selection (when specific is selected) */}
-              {alertRecipientGroup === 'specific' && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Select Members ({alertSelectedMembers.length} selected)
-                  </label>
-                  <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
-                    {members.map((member) => {
-                      const isSelected = alertSelectedMembers.includes(member.user_id)
-                      return (
-                        <button
-                          key={member.id}
-                          onClick={() => toggleMemberSelection(member.user_id)}
-                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 border-b border-border last:border-b-0 ${
-                            isSelected ? 'bg-primary/5' : ''
-                          }`}
-                        >
-                          <div className={`flex h-5 w-5 items-center justify-center rounded border ${
-                            isSelected ? 'bg-primary border-primary' : 'border-border'
-                          }`}>
-                            {isSelected && <CheckCircle className="h-4 w-4 text-primary-foreground" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">
-                              {member.profile?.full_name || member.profile?.email || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {member.profile?.email}
-                            </p>
-                          </div>
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: `${COMMUNITY_ROLE_CONFIG[member.role]?.color}20`,
-                              color: COMMUNITY_ROLE_CONFIG[member.role]?.color
-                            }}
-                          >
-                            {COMMUNITY_ROLE_CONFIG[member.role]?.label}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Alert Title */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Title</label>
-                <Input
-                  placeholder="Enter alert title"
-                  value={alertTitle}
-                  onChange={(e) => setAlertTitle(e.target.value)}
-                />
-              </div>
-
-              {/* Alert Message */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Message</label>
-                <textarea
-                  placeholder="Enter your alert message..."
-                  value={alertMessage}
-                  onChange={(e) => setAlertMessage(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-                />
-              </div>
-
-              {/* Delivery Options */}
-              <div>
-                <label className="block text-sm font-medium mb-3">Delivery Method</label>
-                <div className="space-y-3">
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={alertSendAppAlert}
-                      onChange={(e) => setAlertSendAppAlert(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border"
-                    />
-                    <div className="flex items-start gap-2">
-                      <Bell className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <span className="font-medium text-sm">App Alert</span>
-                        <p className="text-xs text-muted-foreground">
-                          Displayed in the recipient&apos;s dashboard alerts section
-                        </p>
-                      </div>
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={alertSendEmail}
-                      onChange={(e) => setAlertSendEmail(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border"
-                    />
-                    <div className="flex items-start gap-2">
-                      <Mail className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <span className="font-medium text-sm">Email</span>
-                        <p className="text-xs text-muted-foreground">
-                          Send an email notification to all selected recipients
-                        </p>
-                      </div>
-                    </div>
-                  </label>
-                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
-                    <input
-                      type="checkbox"
-                      checked={alertSendSms}
-                      onChange={(e) => setAlertSendSms(e.target.checked)}
-                      className="mt-0.5 h-4 w-4 rounded border-border"
-                    />
-                    <div className="flex items-start gap-2">
-                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground" />
-                      <div>
-                        <span className="font-medium text-sm">SMS</span>
-                        <p className="text-xs text-muted-foreground">
-                          Send SMS to recipients with phone numbers on file
-                        </p>
-                      </div>
-                    </div>
-                  </label>
-                </div>
-              </div>
-
-              {/* Preview */}
-              {alertTitle && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">Preview</label>
-                  <div className={`rounded-xl border p-4 ${ALERT_LEVEL_CONFIG[alertLevel].bgColor} ${ALERT_LEVEL_CONFIG[alertLevel].borderColor}`}>
-                    <div className="flex items-start gap-3">
-                      {(() => {
-                        const IconComponent = ALERT_LEVEL_CONFIG[alertLevel].icon
-                        return <IconComponent className="h-5 w-5 mt-0.5" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }} />
-                      })()}
-                      <div className="flex-1">
-                        <h4 className="font-semibold" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }}>
-                          {alertTitle}
-                        </h4>
-                        {alertMessage && (
-                          <p className="mt-1 text-sm whitespace-pre-wrap">{alertMessage}</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Actions */}
-              <div className="flex gap-3 pt-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowAlertModal(false)
-                    setAlertTitle('')
-                    setAlertMessage('')
-                    setAlertLevel('info')
-                    setAlertRecipientGroup('members')
-                    setAlertSelectedMembers([])
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="flex-1"
-                  onClick={handleSendAlert}
-                  disabled={isSendingAlert || !alertTitle.trim() || !alertMessage.trim() || (!alertSendEmail && !alertSendSms && !alertSendAppAlert)}
-                  style={{
-                    backgroundColor: ALERT_LEVEL_CONFIG[alertLevel].color,
-                  }}
-                >
-                  {isSendingAlert ? (
-                    <>
-                      <span className="material-icons animate-spin text-lg mr-2">sync</span>
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Bell className="h-4 w-4 mr-2" />
-                      Send Alert
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

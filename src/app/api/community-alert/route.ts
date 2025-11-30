@@ -174,52 +174,55 @@ export async function POST(request: NextRequest) {
     const emailErrors: string[] = []
     const smsErrors: string[] = []
 
-    // Create app alert if requested
-    if (sendAppAlert) {
-      const { data: alert, error: alertError } = await supabase
-        .from('alerts')
-        .insert({
-          title,
-          content: message,
-          level: dbAlertLevel,
-          community_id: communityId,
-          author_id: senderId,
-          is_public: false,
-          is_active: true,
-        })
-        .select('id')
-        .single()
+    // Always create an alert record for history tracking
+    const { data: alert, error: alertError } = await supabase
+      .from('alerts')
+      .insert({
+        title,
+        content: message,
+        level: dbAlertLevel,
+        community_id: communityId,
+        author_id: senderId,
+        is_public: false,
+        is_active: sendAppAlert, // Only show in dashboard if sendAppAlert is true
+        sent_via_email: shouldSendEmail,
+        sent_via_sms: shouldSendSms,
+        sent_via_app: sendAppAlert,
+        recipient_count: recipientUserIds.length,
+        recipient_group: recipientGroup,
+      })
+      .select('id')
+      .single()
 
-      if (alertError) {
-        console.error('Failed to create alert:', alertError)
-        return NextResponse.json(
-          { error: 'Failed to create alert in database' },
-          { status: 500 }
-        )
-      }
+    if (alertError) {
+      console.error('Failed to create alert:', alertError)
+      return NextResponse.json(
+        { error: 'Failed to create alert in database' },
+        { status: 500 }
+      )
+    }
 
-      alertId = alert.id
+    alertId = alert.id
 
-      // Create alert_recipients entries for targeted delivery
-      const recipientEntries = recipientUserIds.map(userId => ({
-        alert_id: alert.id,
-        user_id: userId,
-      }))
+    // Create alert_recipients entries for targeted delivery
+    const recipientEntries = recipientUserIds.map(userId => ({
+      alert_id: alert.id,
+      user_id: userId,
+    }))
 
-      // Try to insert alert recipients (table might not exist)
-      try {
-        const supabaseAny = supabase as unknown as {
-          from: (table: string) => {
-            insert: (data: unknown[]) => Promise<{ error: Error | null }>
-          }
+    // Try to insert alert recipients (table might not exist)
+    try {
+      const supabaseAny = supabase as unknown as {
+        from: (table: string) => {
+          insert: (data: unknown[]) => Promise<{ error: Error | null }>
         }
-        await supabaseAny
-          .from('alert_recipients')
-          .insert(recipientEntries)
-      } catch {
-        // Table might not exist yet - alert will still be visible via community_id
-        console.log('alert_recipients table not available, using community-wide delivery')
       }
+      await supabaseAny
+        .from('alert_recipients')
+        .insert(recipientEntries)
+    } catch {
+      // Table might not exist yet - alert will still be visible via community_id
+      console.log('alert_recipients table not available, using community-wide delivery')
     }
 
     // Fetch recipient profiles for email and SMS
@@ -294,6 +297,17 @@ export async function POST(request: NextRequest) {
           }
         }
       }
+    }
+
+    // Update alert with actual sent counts
+    if (alertId && (emailsSent > 0 || smsSent > 0)) {
+      await supabase
+        .from('alerts')
+        .update({
+          email_sent_count: emailsSent,
+          sms_sent_count: smsSent,
+        })
+        .eq('id', alertId)
     }
 
     return NextResponse.json({

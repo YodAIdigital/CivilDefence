@@ -203,6 +203,13 @@ export interface Database {
           latitude: number | null
           longitude: number | null
           radius_km: number | null
+          sent_via_email: boolean
+          sent_via_sms: boolean
+          sent_via_app: boolean
+          recipient_count: number
+          email_sent_count: number
+          sms_sent_count: number
+          recipient_group: string | null
           created_at: string
           updated_at: string
         }
@@ -221,6 +228,13 @@ export interface Database {
           latitude?: number | null
           longitude?: number | null
           radius_km?: number | null
+          sent_via_email?: boolean
+          sent_via_sms?: boolean
+          sent_via_app?: boolean
+          recipient_count?: number
+          email_sent_count?: number
+          sms_sent_count?: number
+          recipient_group?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -239,6 +253,13 @@ export interface Database {
           latitude?: number | null
           longitude?: number | null
           radius_km?: number | null
+          sent_via_email?: boolean
+          sent_via_sms?: boolean
+          sent_via_app?: boolean
+          recipient_count?: number
+          email_sent_count?: number
+          sms_sent_count?: number
+          recipient_group?: string | null
           created_at?: string
           updated_at?: string
         }

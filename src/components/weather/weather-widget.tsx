@@ -157,7 +157,7 @@ export function WeatherWidget() {
             </div>
             <div>
               <p className="text-xs text-muted-foreground">Wind</p>
-              <p className="font-semibold">{weather.windSpeed} km/h</p>
+              <p className="font-semibold">{weather.windSpeed} km/h {weather.windDirection}</p>
             </div>
           </div>
 

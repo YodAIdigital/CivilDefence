@@ -79,6 +79,30 @@ export interface WeatherError {
 const WEATHER_CACHE_KEY = 'civil_defence_weather'
 const CACHE_DURATION = 15 * 60 * 1000 // 15 minutes in milliseconds
 
+// Convert full cardinal direction to abbreviation
+function abbreviateDirection(direction: string): string {
+  const abbreviations: Record<string, string> = {
+    'NORTH': 'N',
+    'NORTHEAST': 'NE',
+    'EAST': 'E',
+    'SOUTHEAST': 'SE',
+    'SOUTH': 'S',
+    'SOUTHWEST': 'SW',
+    'WEST': 'W',
+    'NORTHWEST': 'NW',
+    'NORTH_NORTHEAST': 'NNE',
+    'EAST_NORTHEAST': 'ENE',
+    'EAST_SOUTHEAST': 'ESE',
+    'SOUTH_SOUTHEAST': 'SSE',
+    'SOUTH_SOUTHWEST': 'SSW',
+    'WEST_SOUTHWEST': 'WSW',
+    'WEST_NORTHWEST': 'WNW',
+    'NORTH_NORTHWEST': 'NNW',
+  }
+  const upper = direction.toUpperCase().replace(/-/g, '_').replace(/ /g, '_')
+  return abbreviations[upper] || direction
+}
+
 interface CachedWeather {
   data: WeatherData
   timestamp: number
@@ -105,6 +129,8 @@ function getCachedWeather(lat: number, lng: number): WeatherData | null {
     if (isTimeValid && isLocationSame) {
       return {
         ...parsedCache.data,
+        // Ensure wind direction is abbreviated (for backwards compatibility with old cache)
+        windDirection: abbreviateDirection(parsedCache.data.windDirection || ''),
         lastUpdated: new Date(parsedCache.data.lastUpdated)
       }
     }
@@ -180,7 +206,7 @@ export async function fetchCurrentWeather(
       feelsLike: Math.round(result.feelsLikeTemperature?.degrees || 0),
       humidity: result.relativeHumidity || 0,
       windSpeed: Math.round(result.wind?.speed?.value || 0),
-      windDirection: result.wind?.direction?.cardinal || '',
+      windDirection: abbreviateDirection(result.wind?.direction?.cardinal || ''),
       uvIndex: result.uvIndex || 0,
       visibility: Math.round(result.visibility?.distance || 0),
       cloudCover: result.cloudCover || 0,
