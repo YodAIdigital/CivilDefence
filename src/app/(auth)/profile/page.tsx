@@ -16,6 +16,7 @@ import {
   type UtilityType,
   SKILL_OPTIONS,
   DISABILITY_OPTIONS,
+  EQUIPMENT_OPTIONS,
   RELATIONSHIP_OPTIONS,
   UTILITY_TYPE_CONFIG,
 } from '@/types/database'
@@ -29,6 +30,7 @@ type VisibilityKey =
   | 'utilities'
   | 'skills'
   | 'disabilities'
+  | 'equipment'
   | 'preparedness'
   | 'comments'
 
@@ -63,6 +65,9 @@ interface FormData {
   // Disabilities
   disabilities: string[]
 
+  // Equipment
+  equipment: string[]
+
   // Preparedness
   has_backup_power: boolean
   has_backup_water: boolean
@@ -79,6 +84,7 @@ interface FormData {
     utilities: FieldVisibility
     skills: FieldVisibility
     disabilities: FieldVisibility
+    equipment: FieldVisibility
     preparedness: FieldVisibility
     comments: FieldVisibility
   }
@@ -91,6 +97,7 @@ const defaultVisibility: FormData['visibility'] = {
   utilities: 'private',
   skills: 'community',
   disabilities: 'civil_defence_only',
+  equipment: 'community',
   preparedness: 'community',
   comments: 'civil_defence_only',
 }
@@ -116,6 +123,7 @@ const initialFormData: FormData = {
   utility_companies: [],
   skills: [],
   disabilities: [],
+  equipment: [],
   has_backup_power: false,
   has_backup_water: false,
   has_food_supply: false,
@@ -213,6 +221,7 @@ export default function ProfilePage() {
         utility_companies: extendedData.utility_companies || [],
         skills: extendedData.skills || [],
         disabilities: extendedData.disabilities || [],
+        equipment: extendedData.equipment || [],
         has_backup_power: extendedData.has_backup_power || false,
         has_backup_water: extendedData.has_backup_water || false,
         has_food_supply: extendedData.has_food_supply || false,
@@ -248,6 +257,15 @@ export default function ProfilePage() {
       disabilities: prev.disabilities.includes(disability)
         ? prev.disabilities.filter((d) => d !== disability)
         : [...prev.disabilities, disability],
+    }))
+  }
+
+  const handleEquipmentToggle = (equipmentItem: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      equipment: prev.equipment.includes(equipmentItem)
+        ? prev.equipment.filter((e) => e !== equipmentItem)
+        : [...prev.equipment, equipmentItem],
     }))
   }
 
@@ -379,6 +397,7 @@ export default function ProfilePage() {
         utility_companies: formData.utility_companies,
         skills: formData.skills,
         disabilities: formData.disabilities,
+        equipment: formData.equipment,
         has_backup_power: formData.has_backup_power,
         has_backup_water: formData.has_backup_water,
         has_food_supply: formData.has_food_supply,
@@ -426,6 +445,7 @@ export default function ProfilePage() {
     { id: 'utilities', label: 'Utility Companies', icon: 'bolt' },
     { id: 'skills', label: 'Skills & Qualifications', icon: 'medical_services' },
     { id: 'disabilities', label: 'Disabilities & Needs', icon: 'accessible' },
+    { id: 'equipment', label: 'Equipment', icon: 'construction' },
     { id: 'preparedness', label: 'Preparedness', icon: 'home' },
     { id: 'comments', label: 'General Comments', icon: 'comment' },
   ]
@@ -1042,6 +1062,44 @@ export default function ProfilePage() {
                       className="h-4 w-4 rounded border-border"
                     />
                     <span className="font-medium">{disability.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Equipment */}
+          {activeSection === 'equipment' && (
+            <div className="rounded-xl bg-card p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Equipment</h2>
+                <VisibilitySelect
+                  value={formData.visibility.equipment}
+                  onChange={(v) => handleVisibilityChange('equipment', v)}
+                  fieldName="equipment"
+                />
+              </div>
+              <p className="mb-4 text-sm text-muted-foreground">
+                Select any equipment you have access to that could be useful during an emergency
+                response or community recovery efforts.
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {EQUIPMENT_OPTIONS.map((item) => (
+                  <label
+                    key={item.value}
+                    className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 transition-colors ${
+                      formData.equipment.includes(item.value)
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:bg-muted'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.equipment.includes(item.value)}
+                      onChange={() => handleEquipmentToggle(item.value)}
+                      className="h-4 w-4 rounded border-border"
+                    />
+                    <span className="font-medium">{item.label}</span>
                   </label>
                 ))}
               </div>

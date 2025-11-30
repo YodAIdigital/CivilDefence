@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { loadGoogleMaps } from '@/lib/google-maps-loader'
+import type { RegionPolygon } from '@/types/database'
 
 export interface MapMarker {
   id: string
@@ -13,14 +14,24 @@ export interface MapMarker {
   color?: 'red' | 'blue' | 'green' | 'yellow' | 'purple' | string // supports preset colors or hex values
 }
 
+export interface MapRegion {
+  id: string
+  name: string
+  polygon: RegionPolygon
+  color: string
+  opacity: number
+}
+
 interface GoogleMapProps {
   markers?: MapMarker[]
+  regions?: MapRegion[]
   center?: { lat: number; lng: number }
   zoom?: number
   height?: string
   onMapClick?: (lat: number, lng: number) => void
   onMarkerClick?: (marker: MapMarker) => void
   selectedMarkerId?: string
+  showRegions?: boolean
 }
 
 const DEFAULT_CENTER = { lat: -41.2865, lng: 174.7762 } // Wellington, NZ
@@ -37,16 +48,19 @@ const markerColors: Record<string, string> = {
 
 export function GoogleMap({
   markers = [],
+  regions = [],
   center = DEFAULT_CENTER,
   zoom = DEFAULT_ZOOM,
   height = '400px',
   onMapClick,
   onMarkerClick,
-  selectedMarkerId
+  selectedMarkerId,
+  showRegions = true
 }: GoogleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
   const markersRef = useRef<google.maps.Marker[]>([])
+  const polygonsRef = useRef<google.maps.Polygon[]>([])
   const infoWindowRef = useRef<google.maps.InfoWindow | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -156,6 +170,50 @@ export function GoogleMap({
       mapInstanceRef.current.setZoom(15)
     }
   }, [markers, isLoaded, selectedMarkerId, onMarkerClick])
+
+  // Update regions/polygons
+  useEffect(() => {
+    if (!mapInstanceRef.current || !isLoaded) return
+
+    // Clear existing polygons
+    polygonsRef.current.forEach(polygon => polygon.setMap(null))
+    polygonsRef.current = []
+
+    // Don't render if showRegions is false
+    if (!showRegions) return
+
+    // Add region polygons
+    regions.forEach(region => {
+      if (!region.polygon || region.polygon.length < 3) return
+
+      const polygon = new google.maps.Polygon({
+        paths: region.polygon.map(c => ({ lat: c.lat, lng: c.lng })),
+        fillColor: region.color,
+        fillOpacity: region.opacity,
+        strokeColor: region.color,
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        clickable: true,
+        map: mapInstanceRef.current!,
+      })
+
+      // Add click listener for region info
+      polygon.addListener('click', (e: google.maps.MapMouseEvent) => {
+        if (infoWindowRef.current && e.latLng) {
+          infoWindowRef.current.setContent(`
+            <div style="padding: 8px; max-width: 200px;">
+              <h3 style="font-weight: 600; margin-bottom: 4px;">${region.name}</h3>
+              <p style="color: #666; font-size: 14px;">Community coverage area</p>
+            </div>
+          `)
+          infoWindowRef.current.setPosition(e.latLng)
+          infoWindowRef.current.open(mapInstanceRef.current!)
+        }
+      })
+
+      polygonsRef.current.push(polygon)
+    })
+  }, [regions, isLoaded, showRegions])
 
   // Update center when prop changes
   useEffect(() => {

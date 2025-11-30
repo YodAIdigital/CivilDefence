@@ -2,12 +2,15 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { WeatherWidget } from '@/components/weather/weather-widget'
 import { EventCalendar } from '@/components/calendar/event-calendar'
 import { PreparednessWidget } from '@/components/dashboard/preparedness-widget'
 import { PDFExportWidget } from '@/components/dashboard/pdf-export-widget'
 import { CommunityLocationsWidget } from '@/components/maps/community-locations-widget'
+import { useAuth } from '@/contexts/auth-context'
+import { supabase } from '@/lib/supabase/client'
+import type { AlertLevel } from '@/types/database'
 
 interface Alert {
   id: string
@@ -15,18 +18,21 @@ interface Alert {
   title: string
   message: string
   timestamp: Date
+  communityName?: string | undefined
 }
 
-// Mock alerts - in production these would come from database
-const mockAlerts: Alert[] = [
-  {
-    id: '1',
-    type: 'info',
-    title: 'Welcome to CivilDefence',
-    message: 'Complete your profile to get personalized emergency preparedness recommendations.',
-    timestamp: new Date(),
-  },
-]
+interface DBAlert {
+  id: string
+  title: string
+  content: string
+  level: AlertLevel
+  community_id: string | null
+  is_active: boolean
+  created_at: string
+  communities?: {
+    name: string
+  } | null
+}
 
 const DISMISSED_ALERTS_KEY = 'civildefence_dismissed_alerts'
 
@@ -52,19 +58,108 @@ function saveDismissedAlert(alertId: string) {
   }
 }
 
+// Map database alert level to UI type
+function mapAlertLevel(level: AlertLevel): 'warning' | 'info' | 'emergency' {
+  switch (level) {
+    case 'danger':
+    case 'critical':
+      return 'emergency'
+    case 'warning':
+      return 'warning'
+    case 'info':
+    default:
+      return 'info'
+  }
+}
+
 export default function DashboardPage() {
+  const { user } = useAuth()
   const [alerts, setAlerts] = useState<Alert[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
-  // Load alerts filtering out previously dismissed ones
+  const fetchAlerts = useCallback(async () => {
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      // Get user's community memberships
+      const { data: memberships } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', user.id)
+
+      const communityIds = memberships?.map(m => m.community_id) || []
+
+      // Fetch alerts for user's communities
+      let dbAlerts: DBAlert[] = []
+
+      if (communityIds.length > 0) {
+        const { data: alertsData } = await supabase
+          .from('alerts')
+          .select(`
+            id,
+            title,
+            content,
+            level,
+            community_id,
+            is_active,
+            created_at,
+            communities (
+              name
+            )
+          `)
+          .eq('is_active', true)
+          .in('community_id', communityIds)
+          .order('created_at', { ascending: false })
+          .limit(20)
+
+        dbAlerts = (alertsData || []) as unknown as DBAlert[]
+      }
+
+      // Filter out dismissed alerts
+      const dismissed = getDismissedAlerts()
+      const activeAlerts: Alert[] = dbAlerts
+        .filter(alert => !dismissed.includes(alert.id))
+        .map(alert => ({
+          id: alert.id,
+          type: mapAlertLevel(alert.level),
+          title: alert.title,
+          message: alert.content,
+          timestamp: new Date(alert.created_at),
+          communityName: alert.communities?.name,
+        }))
+
+      setAlerts(activeAlerts)
+    } catch (error) {
+      console.error('Error fetching alerts:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user])
+
   useEffect(() => {
-    const dismissed = getDismissedAlerts()
-    const activeAlerts = mockAlerts.filter(alert => !dismissed.includes(alert.id))
-    setAlerts(activeAlerts)
-  }, [])
+    fetchAlerts()
+  }, [fetchAlerts])
 
-  const dismissAlert = (alertId: string) => {
+  const dismissAlert = async (alertId: string) => {
     saveDismissedAlert(alertId)
     setAlerts(prev => prev.filter(alert => alert.id !== alertId))
+
+    // Also mark as acknowledged in database
+    if (user) {
+      try {
+        await supabase
+          .from('alert_acknowledgments')
+          .insert({
+            alert_id: alertId,
+            user_id: user.id,
+          })
+      } catch {
+        // Ignore errors - localStorage dismissal is sufficient
+      }
+    }
   }
 
   const getAlertIcon = (type: Alert['type']) => {
@@ -85,7 +180,7 @@ export default function DashboardPage() {
       case 'warning':
         return 'bg-amber-50 border-amber-200 text-amber-800 dark:bg-amber-900/20 dark:border-amber-800 dark:text-amber-200'
       default:
-        return 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-200'
+        return 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200'
     }
   }
 
@@ -97,10 +192,17 @@ export default function DashboardPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Alerts & Messages</h2>
-            <span className="text-sm text-muted-foreground">{alerts.length} active</span>
+            <span className="text-sm text-muted-foreground">
+              {isLoading ? 'Loading...' : `${alerts.length} active`}
+            </span>
           </div>
 
-          {alerts.length === 0 ? (
+          {isLoading ? (
+            <div className="rounded-xl border border-border bg-card p-6 text-center">
+              <span className="material-icons animate-spin text-4xl text-muted-foreground">sync</span>
+              <p className="mt-2 text-muted-foreground">Loading alerts...</p>
+            </div>
+          ) : alerts.length === 0 ? (
             <div className="rounded-xl border border-border bg-card p-6 text-center">
               <span className="material-icons text-4xl text-muted-foreground">notifications_none</span>
               <p className="mt-2 text-muted-foreground">No alerts at this time</p>
@@ -114,8 +216,18 @@ export default function DashboardPage() {
                 >
                   <span className="material-icons text-2xl">{getAlertIcon(alert.type)}</span>
                   <div className="flex-1">
-                    <h3 className="font-semibold">{alert.title}</h3>
-                    <p className="mt-1 text-sm opacity-90">{alert.message}</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold">{alert.title}</h3>
+                      {alert.communityName && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10">
+                          {alert.communityName}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-sm opacity-90 whitespace-pre-wrap">{alert.message}</p>
+                    <p className="mt-2 text-xs opacity-70">
+                      {alert.timestamp.toLocaleDateString()} at {alert.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
                   <button
                     onClick={() => dismissAlert(alert.id)}

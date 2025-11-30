@@ -9,10 +9,11 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
-import { Search, UserPlus, X, Mail, Clock } from 'lucide-react'
+import { RegionEditor } from '@/components/maps/region-editor'
+import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json } from '@/types/database'
+import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon } from '@/types/database'
 import { COMMUNITY_ROLE_CONFIG } from '@/types/database'
 
 interface CommunityMemberWithProfile {
@@ -34,6 +35,54 @@ interface PendingInvitation {
 }
 
 type TabType = 'events' | 'members' | 'visibility'
+type AlertLevel = 'info' | 'warning' | 'danger'
+type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
+
+const ALERT_LEVEL_CONFIG = {
+  info: {
+    label: 'General Announcement',
+    description: 'Shown as a green alert',
+    color: '#22c55e',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    borderColor: 'border-green-200 dark:border-green-800',
+    icon: Info,
+  },
+  warning: {
+    label: 'Warning',
+    description: 'Shown as an amber alert',
+    color: '#f59e0b',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+    borderColor: 'border-amber-200 dark:border-amber-800',
+    icon: AlertTriangle,
+  },
+  danger: {
+    label: 'Emergency',
+    description: 'Shown as a red alert',
+    color: '#ef4444',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    borderColor: 'border-red-200 dark:border-red-800',
+    icon: AlertCircle,
+  },
+} as const
+
+const RECIPIENT_GROUP_CONFIG = {
+  admin: {
+    label: 'Admins',
+    description: 'Only community administrators',
+  },
+  team: {
+    label: 'Team',
+    description: 'Admins and team members',
+  },
+  members: {
+    label: 'All Members',
+    description: 'Everyone in the community',
+  },
+  specific: {
+    label: 'Select Members',
+    description: 'Choose specific members',
+  },
+} as const
 
 export default function CommunityManagePage() {
   const params = useParams()
@@ -52,6 +101,7 @@ export default function CommunityManagePage() {
   const [isSavingContacts, setIsSavingContacts] = useState(false)
   const [mapPoints, setMapPoints] = useState<CommunityMapPoint[]>([])
   const [isSavingMapPoints, setIsSavingMapPoints] = useState(false)
+  const [isSavingRegion, setIsSavingRegion] = useState(false)
 
   // Tab state
   const [activeTab, setActiveTab] = useState<TabType>('members')
@@ -64,6 +114,17 @@ export default function CommunityManagePage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteRole, setInviteRole] = useState<CommunityRole>('member')
   const [isInviting, setIsInviting] = useState(false)
+
+  // Alert modal state
+  const [showAlertModal, setShowAlertModal] = useState(false)
+  const [alertTitle, setAlertTitle] = useState('')
+  const [alertMessage, setAlertMessage] = useState('')
+  const [alertLevel, setAlertLevel] = useState<AlertLevel>('info')
+  const [alertRecipientGroup, setAlertRecipientGroup] = useState<RecipientGroup>('members')
+  const [alertSelectedMembers, setAlertSelectedMembers] = useState<string[]>([])
+  const [alertSendEmail, setAlertSendEmail] = useState(true)
+  const [alertSendAppAlert, setAlertSendAppAlert] = useState(true)
+  const [isSendingAlert, setIsSendingAlert] = useState(false)
 
   const fetchData = useCallback(async () => {
     if (!user || !communityId) return
@@ -436,6 +497,85 @@ export default function CommunityManagePage() {
     }
   }
 
+  const handleSendAlert = async () => {
+    if (!alertTitle.trim()) {
+      setError('Please enter an alert title')
+      return
+    }
+
+    if (!alertMessage.trim()) {
+      setError('Please enter an alert message')
+      return
+    }
+
+    if (!alertSendEmail && !alertSendAppAlert) {
+      setError('Please select at least one delivery method (email or app alert)')
+      return
+    }
+
+    if (alertRecipientGroup === 'specific' && alertSelectedMembers.length === 0) {
+      setError('Please select at least one member')
+      return
+    }
+
+    try {
+      setIsSendingAlert(true)
+      setError(null)
+
+      const response = await fetch('/api/community-alert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          communityId,
+          senderId: user?.id,
+          title: alertTitle,
+          message: alertMessage,
+          alertLevel,
+          recipientGroup: alertRecipientGroup,
+          specificMemberIds: alertRecipientGroup === 'specific' ? alertSelectedMembers : undefined,
+          sendEmail: alertSendEmail,
+          sendAppAlert: alertSendAppAlert,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send alert')
+      }
+
+      // Reset form and close modal
+      setShowAlertModal(false)
+      setAlertTitle('')
+      setAlertMessage('')
+      setAlertLevel('info')
+      setAlertRecipientGroup('members')
+      setAlertSelectedMembers([])
+      setAlertSendEmail(true)
+      setAlertSendAppAlert(true)
+
+      const deliveryMethods = []
+      if (alertSendAppAlert) deliveryMethods.push('app alert')
+      if (alertSendEmail && data.emailsSent > 0) deliveryMethods.push(`${data.emailsSent} email${data.emailsSent > 1 ? 's' : ''}`)
+
+      setSuccess(`Alert sent to ${data.recipientCount} recipient${data.recipientCount > 1 ? 's' : ''} (${deliveryMethods.join(', ')})`)
+      setTimeout(() => setSuccess(null), 5000)
+    } catch (err) {
+      console.error('Error sending alert:', err)
+      setError(err instanceof Error ? err.message : 'Failed to send alert')
+    } finally {
+      setIsSendingAlert(false)
+    }
+  }
+
+  const toggleMemberSelection = (userId: string) => {
+    setAlertSelectedMembers(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+
   const saveContacts = async (newContacts: CommunityContact[]) => {
     if (!community) return
 
@@ -490,6 +630,40 @@ export default function CommunityManagePage() {
     } catch (err) {
       console.error('Error updating visibility:', err)
       setError('Failed to update community visibility')
+    }
+  }
+
+  const saveRegion = async (polygon: RegionPolygon | null, color: string, opacity: number) => {
+    if (!community) return
+
+    try {
+      setIsSavingRegion(true)
+      setError(null)
+
+      const { error } = await supabase
+        .from('communities')
+        .update({
+          region_polygon: polygon as unknown as Json,
+          region_color: color,
+          region_opacity: opacity,
+        })
+        .eq('id', community.id)
+
+      if (error) throw error
+
+      setCommunity({
+        ...community,
+        region_polygon: polygon as unknown as Json,
+        region_color: color,
+        region_opacity: opacity,
+      } as Community)
+      setSuccess(polygon ? 'Community region saved successfully' : 'Community region cleared')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error saving region:', err)
+      setError('Failed to save community region')
+    } finally {
+      setIsSavingRegion(false)
     }
   }
 
@@ -607,7 +781,7 @@ export default function CommunityManagePage() {
   const tabs = [
     { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people' },
     { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events` },
-    { id: 'visibility' as TabType, label: community?.is_public ? 'Public' : 'Private', icon: community?.is_public ? 'public' : 'lock' },
+    { id: 'visibility' as TabType, label: 'Response Map', icon: 'map' },
   ]
 
   return (
@@ -625,10 +799,14 @@ export default function CommunityManagePage() {
             Manage members, roles, and community settings.
           </p>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-          <span className="material-icons text-lg">admin_panel_settings</span>
-          Community Admin
-        </div>
+        <Button
+          onClick={() => setShowAlertModal(true)}
+          size="lg"
+          className="gap-2 bg-[#FEB100] hover:bg-[#FEB100]/90 text-[#000542] font-semibold"
+        >
+          <Bell className="h-5 w-5" />
+          Send Alert
+        </Button>
       </div>
 
       {error && (
@@ -937,6 +1115,32 @@ export default function CommunityManagePage() {
             </div>
           </div>
 
+          {/* Community Region Section */}
+          <div className="rounded-xl border border-border bg-card">
+            <div className="border-b border-border p-4">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <span className="material-icons text-blue-500">polyline</span>
+                Community Region
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Draw the area covered by your community. This region will be shown as an overlay on maps.
+              </p>
+            </div>
+            <div className="p-4">
+              <RegionEditor
+                initialPolygon={(community as Record<string, unknown>)?.region_polygon as RegionPolygon | null}
+                initialColor={((community as Record<string, unknown>)?.region_color as string) || '#3b82f6'}
+                initialOpacity={((community as Record<string, unknown>)?.region_opacity as number) || 0.2}
+                center={community?.latitude && community?.longitude
+                  ? { lat: community.latitude, lng: community.longitude }
+                  : undefined
+                }
+                onSave={saveRegion}
+                isSaving={isSavingRegion}
+              />
+            </div>
+          </div>
+
           {/* Locations Section */}
           <div className="rounded-xl border border-border bg-card">
             <div className="border-b border-border p-4">
@@ -1067,6 +1271,260 @@ export default function CommunityManagePage() {
                     <>
                       <Mail className="h-4 w-4 mr-2" />
                       Send Invitation
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Alert Modal */}
+      {showAlertModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl bg-card border border-border">
+            <div className="sticky top-0 bg-card border-b border-border p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-900/30">
+                  <Bell className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold">Send Alert</h2>
+                  <p className="text-sm text-muted-foreground">Notify community members</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAlertModal(false)
+                  setAlertTitle('')
+                  setAlertMessage('')
+                  setAlertLevel('info')
+                  setAlertRecipientGroup('members')
+                  setAlertSelectedMembers([])
+                }}
+                className="p-2 hover:bg-muted rounded-lg"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Alert Level Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Alert Type</label>
+                <div className="grid grid-cols-3 gap-3">
+                  {(Object.keys(ALERT_LEVEL_CONFIG) as AlertLevel[]).map((level) => {
+                    const config = ALERT_LEVEL_CONFIG[level]
+                    const IconComponent = config.icon
+                    const isSelected = alertLevel === level
+                    return (
+                      <button
+                        key={level}
+                        onClick={() => setAlertLevel(level)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          isSelected
+                            ? `${config.bgColor} ${config.borderColor}`
+                            : 'border-border hover:border-primary/30'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
+                          <span className="font-medium" style={{ color: isSelected ? config.color : undefined }}>
+                            {config.label}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{config.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Recipients Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Send To</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {(Object.keys(RECIPIENT_GROUP_CONFIG) as RecipientGroup[]).map((group) => {
+                    const config = RECIPIENT_GROUP_CONFIG[group]
+                    const isSelected = alertRecipientGroup === group
+                    return (
+                      <button
+                        key={group}
+                        onClick={() => setAlertRecipientGroup(group)}
+                        className={`p-3 rounded-lg border text-left transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/30'
+                        }`}
+                      >
+                        <span className="font-medium text-sm">{config.label}</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">{config.description}</p>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Member Selection (when specific is selected) */}
+              {alertRecipientGroup === 'specific' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Select Members ({alertSelectedMembers.length} selected)
+                  </label>
+                  <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
+                    {members.map((member) => {
+                      const isSelected = alertSelectedMembers.includes(member.user_id)
+                      return (
+                        <button
+                          key={member.id}
+                          onClick={() => toggleMemberSelection(member.user_id)}
+                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 border-b border-border last:border-b-0 ${
+                            isSelected ? 'bg-primary/5' : ''
+                          }`}
+                        >
+                          <div className={`flex h-5 w-5 items-center justify-center rounded border ${
+                            isSelected ? 'bg-primary border-primary' : 'border-border'
+                          }`}>
+                            {isSelected && <CheckCircle className="h-4 w-4 text-primary-foreground" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">
+                              {member.profile?.full_name || member.profile?.email || 'Unknown'}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {member.profile?.email}
+                            </p>
+                          </div>
+                          <span
+                            className="text-xs px-2 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: `${COMMUNITY_ROLE_CONFIG[member.role]?.color}20`,
+                              color: COMMUNITY_ROLE_CONFIG[member.role]?.color
+                            }}
+                          >
+                            {COMMUNITY_ROLE_CONFIG[member.role]?.label}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Alert Title */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Title</label>
+                <Input
+                  placeholder="Enter alert title"
+                  value={alertTitle}
+                  onChange={(e) => setAlertTitle(e.target.value)}
+                />
+              </div>
+
+              {/* Alert Message */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Message</label>
+                <textarea
+                  placeholder="Enter your alert message..."
+                  value={alertMessage}
+                  onChange={(e) => setAlertMessage(e.target.value)}
+                  rows={4}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+              </div>
+
+              {/* Delivery Options */}
+              <div>
+                <label className="block text-sm font-medium mb-3">Delivery Method</label>
+                <div className="space-y-3">
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendAppAlert}
+                      onChange={(e) => setAlertSendAppAlert(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div>
+                      <span className="font-medium text-sm">App Alert</span>
+                      <p className="text-xs text-muted-foreground">
+                        Displayed in the recipient&apos;s dashboard alerts section
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendEmail}
+                      onChange={(e) => setAlertSendEmail(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div>
+                      <span className="font-medium text-sm">Email</span>
+                      <p className="text-xs text-muted-foreground">
+                        Send an email notification to all selected recipients
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Preview */}
+              {alertTitle && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Preview</label>
+                  <div className={`rounded-xl border p-4 ${ALERT_LEVEL_CONFIG[alertLevel].bgColor} ${ALERT_LEVEL_CONFIG[alertLevel].borderColor}`}>
+                    <div className="flex items-start gap-3">
+                      {(() => {
+                        const IconComponent = ALERT_LEVEL_CONFIG[alertLevel].icon
+                        return <IconComponent className="h-5 w-5 mt-0.5" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }} />
+                      })()}
+                      <div className="flex-1">
+                        <h4 className="font-semibold" style={{ color: ALERT_LEVEL_CONFIG[alertLevel].color }}>
+                          {alertTitle}
+                        </h4>
+                        {alertMessage && (
+                          <p className="mt-1 text-sm whitespace-pre-wrap">{alertMessage}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-2">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setShowAlertModal(false)
+                    setAlertTitle('')
+                    setAlertMessage('')
+                    setAlertLevel('info')
+                    setAlertRecipientGroup('members')
+                    setAlertSelectedMembers([])
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  className="flex-1"
+                  onClick={handleSendAlert}
+                  disabled={isSendingAlert || !alertTitle.trim() || !alertMessage.trim() || (!alertSendEmail && !alertSendAppAlert)}
+                  style={{
+                    backgroundColor: ALERT_LEVEL_CONFIG[alertLevel].color,
+                  }}
+                >
+                  {isSendingAlert ? (
+                    <>
+                      <span className="material-icons animate-spin text-lg mr-2">sync</span>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Bell className="h-4 w-4 mr-2" />
+                      Send Alert
                     </>
                   )}
                 </Button>

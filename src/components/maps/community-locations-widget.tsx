@@ -1,13 +1,21 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { GoogleMap, MapMarker } from './google-map'
+import { GoogleMap, MapMarker, MapRegion } from './google-map'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
-import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp } from 'lucide-react'
-import type { CommunityMapPoint, MapPointType } from '@/types/database'
+import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Layers, Search, X } from 'lucide-react'
+import type { CommunityMapPoint, MapPointType, RegionPolygon } from '@/types/database'
 import { MAP_POINT_TYPE_CONFIG } from '@/types/database'
+
+interface CommunityRegionData {
+  id: string
+  name: string
+  region_polygon: RegionPolygon | null
+  region_color: string
+  region_opacity: number
+}
 
 interface CommunityLocationsWidgetProps {
   showHeader?: boolean
@@ -21,14 +29,18 @@ export function CommunityLocationsWidget({
   const { user } = useAuth()
   const { activeCommunity, communities } = useCommunity()
   const [locations, setLocations] = useState<CommunityMapPoint[]>([])
+  const [communityRegions, setCommunityRegions] = useState<CommunityRegionData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAllLocations, setShowAllLocations] = useState(false)
   const [hiddenTypes, setHiddenTypes] = useState<Set<MapPointType>>(new Set())
+  const [showRegions, setShowRegions] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
 
   const fetchLocations = useCallback(async () => {
     if (!user) {
       setLocations([])
+      setCommunityRegions([])
       setIsLoading(false)
       return
     }
@@ -41,6 +53,7 @@ export function CommunityLocationsWidget({
 
       if (communityIds.length === 0) {
         setLocations([])
+        setCommunityRegions([])
         setIsLoading(false)
         return
       }
@@ -71,6 +84,17 @@ export function CommunityLocationsWidget({
         setLocations([])
       } else {
         setLocations(data || [])
+      }
+
+      // Fetch community regions
+      const { data: regionsData } = await supabase
+        .from('communities')
+        .select('id, name, region_polygon, region_color, region_opacity')
+        .in('id', communityIds)
+        .not('region_polygon', 'is', null)
+
+      if (regionsData) {
+        setCommunityRegions(regionsData as unknown as CommunityRegionData[])
       }
     } catch (err) {
       console.error('Error fetching locations:', err)
@@ -104,9 +128,8 @@ export function CommunityLocationsWidget({
     return null // Don't show widget if no locations
   }
 
-  // Separate meeting points from other locations
+  // Get meeting points for map centering
   const meetingPoints = locations.filter(l => l.point_type === 'meeting_point')
-  const referenceLocations = locations.filter(l => l.point_type !== 'meeting_point')
 
   // Get community name for a location
   const getCommunityName = (communityId: string) => {
@@ -126,8 +149,30 @@ export function CommunityLocationsWidget({
     })
   }
 
-  // Filter locations based on hidden types
-  const visibleLocations = locations.filter(l => !hiddenTypes.has(l.point_type))
+  // Filter locations based on hidden types and search query
+  const visibleLocations = locations.filter(l => {
+    // Check if type is hidden
+    if (hiddenTypes.has(l.point_type)) return false
+
+    // Check search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      const config = MAP_POINT_TYPE_CONFIG[l.point_type]
+      const typeLabel = config?.label?.toLowerCase() || ''
+      const name = l.name?.toLowerCase() || ''
+      const description = l.description?.toLowerCase() || ''
+      const address = l.address?.toLowerCase() || ''
+
+      return (
+        name.includes(query) ||
+        description.includes(query) ||
+        typeLabel.includes(query) ||
+        address.includes(query)
+      )
+    }
+
+    return true
+  })
 
   // Create markers for the map using colors from config (only visible types)
   const markers: MapMarker[] = visibleLocations.map(location => {
@@ -144,6 +189,17 @@ export function CommunityLocationsWidget({
     }
     return marker
   })
+
+  // Create regions for the map
+  const regions: MapRegion[] = communityRegions
+    .filter(c => c.region_polygon && c.region_polygon.length >= 3)
+    .map(c => ({
+      id: c.id,
+      name: c.name,
+      polygon: c.region_polygon!,
+      color: c.region_color || '#3b82f6',
+      opacity: c.region_opacity || 0.2,
+    }))
 
   // Calculate map center based on all markers
   const getMapCenter = (): { lat: number; lng: number } | undefined => {
@@ -173,9 +229,11 @@ export function CommunityLocationsWidget({
 
   const mapCenter = getMapCenter()
 
-  // Locations to display (limited or all)
+  // Locations to display (filtered by search and limited)
   const displayLimit = 5
-  const allLocationsToShow = [...meetingPoints, ...referenceLocations]
+  const visibleMeetingPoints = visibleLocations.filter(l => l.point_type === 'meeting_point')
+  const visibleReferenceLocations = visibleLocations.filter(l => l.point_type !== 'meeting_point')
+  const allLocationsToShow = [...visibleMeetingPoints, ...visibleReferenceLocations]
   const locationsToDisplay = showAllLocations
     ? allLocationsToShow
     : allLocationsToShow.slice(0, displayLimit)
@@ -184,13 +242,36 @@ export function CommunityLocationsWidget({
     <div className="rounded-xl bg-card border border-border overflow-hidden">
       {showHeader && (
         <div className="p-4 border-b border-border">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <span className="material-icons text-green-500">map</span>
-            Community Locations
-          </h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Key locations from your communities
-          </p>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <span className="material-icons text-green-500">map</span>
+                Community Locations
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Key locations from your communities
+              </p>
+            </div>
+            {/* Search Input */}
+            <div className="relative flex-shrink-0 w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search locations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-8 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
 
@@ -198,10 +279,27 @@ export function CommunityLocationsWidget({
       <div className="relative">
         <GoogleMap
           markers={markers}
+          regions={regions}
+          showRegions={showRegions}
           height="300px"
           {...(mapCenter && { center: mapCenter })}
           zoom={markers.length === 1 ? 14 : 11}
         />
+        {/* Region toggle button */}
+        {regions.length > 0 && (
+          <button
+            onClick={() => setShowRegions(prev => !prev)}
+            className={`absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium shadow-sm transition-colors ${
+              showRegions
+                ? 'bg-blue-500 text-white hover:bg-blue-600'
+                : 'bg-white/90 dark:bg-slate-800/90 text-muted-foreground hover:text-foreground'
+            }`}
+            title={showRegions ? 'Hide community regions' : 'Show community regions'}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            Regions
+          </button>
+        )}
         {/* Dynamic Legend based on location types present - clickable to toggle */}
         {(() => {
           // Get unique point types that are present
@@ -238,6 +336,21 @@ export function CommunityLocationsWidget({
 
       {/* Locations List */}
       <div className="divide-y divide-border" style={{ maxHeight, overflowY: 'auto' }}>
+        {/* No results message */}
+        {searchQuery && allLocationsToShow.length === 0 && (
+          <div className="p-6 text-center">
+            <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              No locations found matching &quot;{searchQuery}&quot;
+            </p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-2 text-sm text-primary hover:underline"
+            >
+              Clear search
+            </button>
+          </div>
+        )}
         {locationsToDisplay.map(location => {
           const config = MAP_POINT_TYPE_CONFIG[location.point_type]
           const isExpanded = expandedId === location.id

@@ -427,7 +427,7 @@ export default function CommunityEventsPage() {
   const tabs: { id: TabType; label: string; icon: string; href?: string }[] = [
     { id: 'members', label: `${members.length} Members`, icon: 'people', href: `/community/${communityId}/manage` },
     { id: 'events', label: 'Manage Events', icon: 'event' },
-    { id: 'visibility', label: community?.is_public ? 'Public' : 'Private', icon: community?.is_public ? 'public' : 'lock', href: `/community/${communityId}/manage` },
+    { id: 'visibility', label: 'Response Map', icon: 'map', href: `/community/${communityId}/manage` },
   ]
 
   return (

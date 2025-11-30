@@ -13,6 +13,15 @@ export function Providers({ children }: ProvidersProps) {
 
   useEffect(() => {
     setMounted(true)
+
+    // Register service worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker
+        .register('/sw.js')
+        .catch(() => {
+          // Service worker registration failed - app will work without offline support
+        })
+    }
   }, [])
 
   // Render children without providers during SSR to avoid context issues

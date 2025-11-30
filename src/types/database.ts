@@ -91,6 +91,9 @@ export interface Database {
           meeting_point_lng: number | null
           member_count: number
           settings: Json
+          region_polygon: Json | null
+          region_color: string | null
+          region_opacity: number | null
           created_at: string
           updated_at: string
         }
@@ -110,6 +113,9 @@ export interface Database {
           meeting_point_lng?: number | null
           member_count?: number
           settings?: Json
+          region_polygon?: Json | null
+          region_color?: string | null
+          region_opacity?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -129,6 +135,9 @@ export interface Database {
           meeting_point_lng?: number | null
           member_count?: number
           settings?: Json
+          region_polygon?: Json | null
+          region_color?: string | null
+          region_opacity?: number | null
           created_at?: string
           updated_at?: string
         }
@@ -863,6 +872,9 @@ export interface ProfileExtended {
   // Disabilities & Needs
   disabilities?: string[] // Array of: 'unable_walk', 'difficulty_walking', 'medical_equipment', 'essential_medication', 'blind', 'deaf'
 
+  // Equipment
+  equipment?: string[] // Array of: '4wd', 'tractor', 'digger', 'water_filtration', 'chainsaw_certified'
+
   // Emergency Preparedness
   has_backup_power?: boolean
   has_backup_water?: boolean
@@ -879,6 +891,7 @@ export interface ProfileExtended {
     utilities?: FieldVisibility
     skills?: FieldVisibility
     disabilities?: FieldVisibility
+    equipment?: FieldVisibility
     preparedness?: FieldVisibility
     comments?: FieldVisibility
   }
@@ -902,6 +915,15 @@ export const DISABILITY_OPTIONS = [
   { value: 'essential_medication', label: 'Rely on essential medication' },
   { value: 'blind', label: 'Blind or visually impaired' },
   { value: 'deaf', label: 'Deaf or hard of hearing' },
+] as const
+
+// Equipment options
+export const EQUIPMENT_OPTIONS = [
+  { value: '4wd', label: '4 Wheel Drive' },
+  { value: 'tractor', label: 'Tractor' },
+  { value: 'digger', label: 'Digger' },
+  { value: 'water_filtration', label: 'Water Filtration' },
+  { value: 'chainsaw_certified', label: 'Chainsaw with certification' },
 ] as const
 
 // Checklist item type
@@ -1427,3 +1449,30 @@ export const COMMUNITY_ROLE_CONFIG = {
     description: 'Full control over community settings and members',
   },
 } as const
+
+// ==========================================
+// Community Region Types
+// ==========================================
+
+// A single coordinate point for the region polygon
+export interface RegionCoordinate {
+  lat: number
+  lng: number
+}
+
+// Region polygon stored in communities table
+export type RegionPolygon = RegionCoordinate[]
+
+// Community with region data (parsed from Json)
+export interface CommunityWithRegion extends Omit<Community, 'region_polygon' | 'region_color' | 'region_opacity'> {
+  region_polygon: RegionPolygon | null
+  region_color: string
+  region_opacity: number
+}
+
+// For updating community region
+export interface UpdateCommunityRegion {
+  region_polygon: RegionPolygon | null
+  region_color?: string
+  region_opacity?: number
+}

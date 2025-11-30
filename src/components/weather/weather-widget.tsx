@@ -130,9 +130,9 @@ export function WeatherWidget() {
                 Feels like {weather.feelsLike}°C
               </p>
             </div>
-            <div className="text-right">
-              <span className="material-icons text-6xl drop-shadow-md">{icon}</span>
-              <p className="text-sm capitalize drop-shadow-sm">{weather.description}</p>
+            <div className="text-right flex flex-col items-end">
+              <span className="material-icons text-7xl opacity-90">{icon}</span>
+              <p className="text-sm capitalize mt-1">{weather.description}</p>
             </div>
           </div>
         </div>

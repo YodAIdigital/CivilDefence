@@ -1,11 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { GoogleMap, MapMarker } from './google-map'
 import { AddressAutocomplete, type AddressResult } from './address-autocomplete'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { MapPin, X, Plus, Edit2, Trash2, Phone, Mail, User } from 'lucide-react'
+import { MapPin, X, Plus, Edit2, Trash2, Phone, Mail, User, Search } from 'lucide-react'
 import type {
   CommunityMapPoint,
   MapPointType,
@@ -65,11 +65,37 @@ export function CommunityLocationsManager({
   const [formData, setFormData] = useState<PointFormData>(initialFormData)
   const [expandedPointId, setExpandedPointId] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<MapPointType | 'all'>('all')
+  const [searchQuery, setSearchQuery] = useState('')
 
-  // Apply filter
-  const filteredPoints = filterType === 'all'
-    ? points
-    : points.filter(p => p.point_type === filterType)
+  // Apply search and filter
+  const filteredPoints = useMemo(() => {
+    let result = points
+
+    // Apply type filter
+    if (filterType !== 'all') {
+      result = result.filter(p => p.point_type === filterType)
+    }
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim()
+      result = result.filter(point => {
+        const typeLabel = MAP_POINT_TYPE_CONFIG[point.point_type]?.label?.toLowerCase() || ''
+        const name = point.name?.toLowerCase() || ''
+        const description = point.description?.toLowerCase() || ''
+        const address = point.address?.toLowerCase() || ''
+
+        return (
+          name.includes(query) ||
+          description.includes(query) ||
+          typeLabel.includes(query) ||
+          address.includes(query)
+        )
+      })
+    }
+
+    return result
+  }, [points, filterType, searchQuery])
 
   const handleAddNew = (pointType?: MapPointType) => {
     setEditingPoint(null)
@@ -388,19 +414,41 @@ export function CommunityLocationsManager({
           </Button>
         </div>
 
-        {/* Filter by type */}
+        {/* Search and Filter */}
         {points.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            <button
-              onClick={() => setFilterType('all')}
-              className={`px-3 py-1 text-xs rounded-full border transition-colors ${
-                filterType === 'all'
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
-              All
-            </button>
+          <div className="space-y-3 mb-4">
+            {/* Search input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search locations by name, type, or description..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-8"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter by type */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setFilterType('all')}
+                className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                  filterType === 'all'
+                    ? 'bg-primary text-primary-foreground border-primary'
+                    : 'border-border hover:bg-muted'
+                }`}
+              >
+                All
+              </button>
             {Object.entries(MAP_POINT_TYPE_CONFIG)
               .map(([key, config]) => {
                 const count = points.filter(p => p.point_type === key).length
@@ -420,6 +468,23 @@ export function CommunityLocationsManager({
                   </button>
                 )
               })}
+            </div>
+          </div>
+        )}
+
+        {/* Search results info */}
+        {searchQuery && filteredPoints.length === 0 && points.length > 0 && (
+          <div className="text-center py-6 border border-dashed rounded-lg bg-muted/30">
+            <Search className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              No locations found matching &quot;{searchQuery}&quot;
+            </p>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="mt-2 text-sm text-primary hover:underline"
+            >
+              Clear search
+            </button>
           </div>
         )}
 
@@ -430,10 +495,9 @@ export function CommunityLocationsManager({
               No locations added yet. Add meeting points, hospitals, emergency services, shelters, etc.
             </p>
           </div>
-        ) : (
+        ) : filteredPoints.length > 0 ? (
           <div className="space-y-2">
-            {points
-              .filter(p => filterType === 'all' || p.point_type === filterType)
+            {filteredPoints
               .sort((a, b) => {
                 // Meeting points always come first
                 if (a.point_type === 'meeting_point' && b.point_type !== 'meeting_point') return -1
@@ -453,7 +517,7 @@ export function CommunityLocationsManager({
                 />
               ))}
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Map View */}

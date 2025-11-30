@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/contexts/auth-context'
 import { HomeLogo } from '@/components/custom/home-logo'
+import { InstallPrompt } from '@/components/pwa/install-prompt'
 
 export default function Home() {
   const { isAuthenticated, isLoading } = useAuth()
@@ -95,6 +96,9 @@ export default function Home() {
             </>
           )}
         </div>
+
+        {/* Install App Prompt - Only shown when not authenticated */}
+        {!isAuthenticated && !isLoading && <InstallPrompt />}
 
         {/* Status Indicator */}
         <div className="mt-16">

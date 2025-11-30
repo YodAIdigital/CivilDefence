@@ -23,7 +23,6 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { href: '/dashboard', icon: 'dashboard', label: 'Dashboard' },
-  { href: '/profile', icon: 'person', label: 'My Profile' },
   { href: '/guides', icon: 'menu_book', label: 'Response Plans' },
   { href: '/checklist', icon: 'checklist', label: 'Emergency Kit' },
   { href: '/contacts', icon: 'contact_phone', label: 'Contacts' },
