@@ -95,10 +95,16 @@ export async function signInWithOAuth(
   provider: 'google' | 'github' | 'facebook'
 ): Promise<AuthResult> {
   try {
+    // Get the current window location origin to ensure redirects go back to the correct device/IP
+    // This fixes issues where mobile devices might be redirected to localhost/0.0.0.0
+    const redirectTo = typeof window !== 'undefined' 
+      ? `${window.location.origin}/auth/callback`
+      : undefined
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
+        redirectTo
       }
     })
 

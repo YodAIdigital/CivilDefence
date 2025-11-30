@@ -1,29 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, getCommunityAlertEmail } from '@/lib/email'
-
-// Create admin client dynamically to ensure env vars are read at runtime
-function getAdminClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.SUPABASE_SERVICE_KEY
-
-  console.log('Supabase config check:', {
-    hasUrl: !!url,
-    hasKey: !!key,
-    urlPrefix: url?.substring(0, 30)
-  })
-
-  if (!url || !key) {
-    throw new Error(`Missing Supabase configuration: URL=${!!url}, KEY=${!!key}`)
-  }
-
-  return createClient(url, key, {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  })
-}
+import { sendSms, formatAlertSms } from '@/lib/sms'
 
 type AlertLevel = 'info' | 'warning' | 'danger'
 type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
@@ -37,12 +15,13 @@ interface AlertRequest {
   recipientGroup: RecipientGroup
   specificMemberIds?: string[]
   sendEmail: boolean
+  sendSms: boolean
   sendAppAlert: boolean
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = getAdminClient()
+    const supabase = createAdminClient()
 
     const body: AlertRequest = await request.json()
     const {
@@ -54,6 +33,7 @@ export async function POST(request: NextRequest) {
       recipientGroup,
       specificMemberIds,
       sendEmail: shouldSendEmail,
+      sendSms: shouldSendSms,
       sendAppAlert,
     } = body
 
@@ -66,35 +46,61 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify sender is admin of the community
+    console.log('=== COMMUNITY ALERT DEBUG ===')
     console.log('Checking membership for:', { communityId, senderId })
+    console.log('Supabase URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'NOT SET')
+    console.log('Service Key:', process.env.SUPABASE_SERVICE_KEY ? 'Set (length: ' + process.env.SUPABASE_SERVICE_KEY.length + ')' : 'NOT SET')
 
-    const { data: senderMembership, error: membershipError } = await supabase
-      .from('community_members')
-      .select('role, user_id, community_id')
-      .eq('community_id', communityId)
-      .eq('user_id', senderId)
-      .single()
-
-    console.log('Membership result:', JSON.stringify({ senderMembership, membershipError }, null, 2))
-
-    // Also check if user is the community creator
-    const { data: communityCreator } = await supabase
+    // First check if user is the community creator (they have full access)
+    const { data: community, error: communityError } = await supabase
       .from('communities')
-      .select('created_by')
+      .select('created_by, name')
       .eq('id', communityId)
       .single()
 
-    console.log('Community creator:', communityCreator?.created_by, 'Sender:', senderId, 'Match:', communityCreator?.created_by === senderId)
+    console.log('Community query result:', { data: community, error: communityError })
 
-    const isCreator = communityCreator?.created_by === senderId
-    const isMember = !membershipError && senderMembership
-    const isAdmin = isMember && senderMembership.role === 'admin'
+    if (communityError) {
+      console.log('Community error details:', JSON.stringify(communityError, null, 2))
+      return NextResponse.json(
+        { error: `Failed to fetch community: ${communityError.message}` },
+        { status: 500 }
+      )
+    }
 
-    console.log('Permission check:', { isCreator, isMember, isAdmin })
+    if (!community) {
+      return NextResponse.json(
+        { error: 'Community not found' },
+        { status: 404 }
+      )
+    }
+
+    const isCreator = community.created_by === senderId
+    console.log('Is creator:', isCreator, '| community.created_by:', community.created_by, '| senderId:', senderId)
+
+    // Check membership
+    const { data: membership, error: membershipError } = await supabase
+      .from('community_members')
+      .select('user_id, role')
+      .eq('community_id', communityId)
+      .eq('user_id', senderId)
+      .maybeSingle()
+
+    console.log('Membership query result:', { data: membership, error: membershipError })
+
+    if (membershipError) {
+      console.log('Membership error details:', JSON.stringify(membershipError, null, 2))
+    }
+
+    const isMember = !!membership
+    const isAdmin = isMember && (membership?.role === 'admin' || membership?.role === 'super_admin')
+
+    console.log('Permission check:', { isCreator, isMember, isAdmin, memberRole: membership?.role })
+    console.log('=== END DEBUG ===')
 
     if (!isMember && !isCreator) {
       return NextResponse.json(
-        { error: 'You are not a member of this community' },
+        { error: `You are not authorized to send alerts. SenderId: ${senderId}, isCreator: ${isCreator}, isMember: ${isMember}` },
         { status: 403 }
       )
     }
@@ -104,20 +110,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Only community admins can send alerts' },
         { status: 403 }
-      )
-    }
-
-    // Fetch community details
-    const { data: community, error: communityError } = await supabase
-      .from('communities')
-      .select('name')
-      .eq('id', communityId)
-      .single()
-
-    if (communityError || !community) {
-      return NextResponse.json(
-        { error: 'Community not found' },
-        { status: 404 }
       )
     }
 
@@ -178,7 +170,9 @@ export async function POST(request: NextRequest) {
 
     let alertId: string | null = null
     let emailsSent = 0
+    let smsSent = 0
     const emailErrors: string[] = []
+    const smsErrors: string[] = []
 
     // Create app alert if requested
     if (sendAppAlert) {
@@ -228,44 +222,75 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Fetch recipient profiles for email and SMS
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, email, full_name, phone')
+      .in('id', recipientUserIds)
+
+    if (profilesError) {
+      console.error('Failed to fetch recipient profiles:', profilesError)
+    }
+
     // Send emails if requested
-    if (shouldSendEmail) {
-      // Fetch recipient emails
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .in('id', recipientUserIds)
+    if (shouldSendEmail && profiles && profiles.length > 0) {
+      const emailTemplate = getCommunityAlertEmail({
+        communityName: community.name,
+        senderName: senderProfile.full_name || senderProfile.email,
+        alertLevel,
+        title,
+        message,
+      })
 
-      if (profilesError) {
-        console.error('Failed to fetch recipient profiles:', profilesError)
-      } else if (profiles && profiles.length > 0) {
-        const emailTemplate = getCommunityAlertEmail({
-          communityName: community.name,
-          senderName: senderProfile.full_name || senderProfile.email,
-          alertLevel,
-          title,
-          message,
-        })
+      // Send emails to all recipients
+      for (const profile of profiles) {
+        if (profile.email) {
+          try {
+            const success = await sendEmail({
+              to: profile.email,
+              subject: emailTemplate.subject,
+              html: emailTemplate.html,
+            })
 
-        // Send emails to all recipients
-        for (const profile of profiles) {
-          if (profile.email) {
-            try {
-              const success = await sendEmail({
-                to: profile.email,
-                subject: emailTemplate.subject,
-                html: emailTemplate.html,
-              })
-
-              if (success) {
-                emailsSent++
-              } else {
-                emailErrors.push(profile.email)
-              }
-            } catch (err) {
-              console.error(`Failed to send email to ${profile.email}:`, err)
+            if (success) {
+              emailsSent++
+            } else {
               emailErrors.push(profile.email)
             }
+          } catch (err) {
+            console.error(`Failed to send email to ${profile.email}:`, err)
+            emailErrors.push(profile.email)
+          }
+        }
+      }
+    }
+
+    // Send SMS if requested
+    if (shouldSendSms && profiles && profiles.length > 0) {
+      const smsMessage = formatAlertSms({
+        communityName: community.name,
+        alertLevel,
+        title,
+        message,
+      })
+
+      // Send SMS to all recipients with phone numbers
+      for (const profile of profiles) {
+        if (profile.phone) {
+          try {
+            const result = await sendSms({
+              to: profile.phone,
+              message: smsMessage,
+            })
+
+            if (result.success) {
+              smsSent++
+            } else {
+              smsErrors.push(profile.phone)
+            }
+          } catch (err) {
+            console.error(`Failed to send SMS to ${profile.phone}:`, err)
+            smsErrors.push(profile.phone)
           }
         }
       }
@@ -276,7 +301,9 @@ export async function POST(request: NextRequest) {
       alertId,
       recipientCount: recipientUserIds.length,
       emailsSent,
+      smsSent,
       emailErrors: emailErrors.length > 0 ? emailErrors : undefined,
+      smsErrors: smsErrors.length > 0 ? smsErrors : undefined,
     })
   } catch (error) {
     console.error('Error sending community alert:', error)

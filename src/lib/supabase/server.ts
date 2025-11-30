@@ -2,15 +2,25 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/database'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
+// Read env vars dynamically to ensure they're available at runtime
+function getSupabaseUrl() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!url) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
+  return url
+}
+
+function getSupabaseServiceKey() {
+  const key = process.env.SUPABASE_SERVICE_KEY
+  if (!key) throw new Error('Missing SUPABASE_SERVICE_KEY')
+  return key
+}
 
 /**
  * Create a Supabase client for server-side operations
  * Uses service key for admin operations (bypasses RLS)
  */
 export function createServerClient() {
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  return createClient<Database>(getSupabaseUrl(), getSupabaseServiceKey(), {
     auth: {
       autoRefreshToken: false,
       persistSession: false
@@ -28,7 +38,7 @@ export async function createServerClientWithAuth() {
   const refreshToken = cookieStore.get('sb-refresh-token')?.value
 
   const client = createClient<Database>(
-    supabaseUrl,
+    getSupabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       auth: {
@@ -76,7 +86,7 @@ export async function getServerUser() {
  * Bypasses all RLS policies
  */
 export function createAdminClient() {
-  return createClient<Database>(supabaseUrl, supabaseServiceKey, {
+  return createClient<Database>(getSupabaseUrl(), getSupabaseServiceKey(), {
     auth: {
       autoRefreshToken: false,
       persistSession: false

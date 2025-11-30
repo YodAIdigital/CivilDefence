@@ -5,7 +5,7 @@ import { GoogleMap, MapMarker, MapRegion } from './google-map'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
-import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Layers, Search, X } from 'lucide-react'
+import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
 import type { CommunityMapPoint, MapPointType, RegionPolygon } from '@/types/database'
 import { MAP_POINT_TYPE_CONFIG } from '@/types/database'
 
@@ -34,7 +34,7 @@ export function CommunityLocationsWidget({
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [showAllLocations, setShowAllLocations] = useState(false)
   const [hiddenTypes, setHiddenTypes] = useState<Set<MapPointType>>(new Set())
-  const [showRegions, setShowRegions] = useState(true)
+  const showRegions = true // Always show community regions
   const [searchQuery, setSearchQuery] = useState('')
 
   const fetchLocations = useCallback(async () => {
@@ -281,21 +281,6 @@ export function CommunityLocationsWidget({
           zoom={markers.length === 1 ? 14 : 11}
           fitToRegions={regions.length > 0}
         />
-        {/* Region toggle button */}
-        {regions.length > 0 && (
-          <button
-            onClick={() => setShowRegions(prev => !prev)}
-            className={`absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium shadow-sm transition-colors ${
-              showRegions
-                ? 'bg-blue-500 text-white hover:bg-blue-600'
-                : 'bg-white/90 dark:bg-slate-800/90 text-muted-foreground hover:text-foreground'
-            }`}
-            title={showRegions ? 'Hide community regions' : 'Show community regions'}
-          >
-            <Layers className="h-3.5 w-3.5" />
-            Region
-          </button>
-        )}
         {/* Dynamic Legend based on location types present - clickable to toggle */}
         {(() => {
           // Get unique point types that are present

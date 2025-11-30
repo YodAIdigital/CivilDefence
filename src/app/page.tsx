@@ -2,6 +2,8 @@
 
 export const dynamic = 'force-dynamic'
 
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Users, Bell, Wifi } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,7 +13,28 @@ import { HomeLogo } from '@/components/custom/home-logo'
 import { InstallPrompt } from '@/components/pwa/install-prompt'
 
 export default function Home() {
+  const router = useRouter()
   const { isAuthenticated, isLoading } = useAuth()
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      router.push('/dashboard')
+    }
+  }, [isAuthenticated, isLoading, router])
+
+  // Show loading state while checking auth or redirecting
+  if (isLoading || isAuthenticated) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 dark:bg-slate-900">
+        <div className="flex flex-col items-center gap-3">
+          <span className="material-icons animate-spin text-4xl text-primary">sync</span>
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 dark:bg-slate-900">
       <div className="container mx-auto px-4 py-16 text-center">
@@ -77,28 +100,16 @@ export default function Home() {
 
         {/* CTA Buttons */}
         <div className="mt-12 flex flex-col items-center justify-center gap-4 sm:flex-row">
-          {isLoading ? (
-            <Button size="lg" disabled>
-              Loading...
-            </Button>
-          ) : isAuthenticated ? (
-            <Button size="lg" asChild>
-              <Link href="/dashboard">Go to Dashboard</Link>
-            </Button>
-          ) : (
-            <>
-              <Button size="lg" asChild>
-                <Link href="/register">Get Started</Link>
-              </Button>
-              <Button variant="outline" size="lg" asChild>
-                <Link href="/login">Sign In</Link>
-              </Button>
-            </>
-          )}
+          <Button size="lg" asChild>
+            <Link href="/register">Get Started</Link>
+          </Button>
+          <Button variant="outline" size="lg" asChild>
+            <Link href="/login">Sign In</Link>
+          </Button>
         </div>
 
-        {/* Install App Prompt - Only shown when not authenticated */}
-        {!isAuthenticated && !isLoading && <InstallPrompt />}
+        {/* Install App Prompt */}
+        <InstallPrompt />
 
         {/* Status Indicator */}
         <div className="mt-16">

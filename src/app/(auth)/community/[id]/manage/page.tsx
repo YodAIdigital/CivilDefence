@@ -10,7 +10,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
 import { RegionEditor } from '@/components/maps/region-editor'
-import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle } from 'lucide-react'
+import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon } from '@/types/database'
@@ -123,6 +123,7 @@ export default function CommunityManagePage() {
   const [alertRecipientGroup, setAlertRecipientGroup] = useState<RecipientGroup>('members')
   const [alertSelectedMembers, setAlertSelectedMembers] = useState<string[]>([])
   const [alertSendEmail, setAlertSendEmail] = useState(true)
+  const [alertSendSms, setAlertSendSms] = useState(false)
   const [alertSendAppAlert, setAlertSendAppAlert] = useState(true)
   const [isSendingAlert, setIsSendingAlert] = useState(false)
 
@@ -508,8 +509,8 @@ export default function CommunityManagePage() {
       return
     }
 
-    if (!alertSendEmail && !alertSendAppAlert) {
-      setError('Please select at least one delivery method (email or app alert)')
+    if (!alertSendEmail && !alertSendSms && !alertSendAppAlert) {
+      setError('Please select at least one delivery method')
       return
     }
 
@@ -534,6 +535,7 @@ export default function CommunityManagePage() {
           recipientGroup: alertRecipientGroup,
           specificMemberIds: alertRecipientGroup === 'specific' ? alertSelectedMembers : undefined,
           sendEmail: alertSendEmail,
+          sendSms: alertSendSms,
           sendAppAlert: alertSendAppAlert,
         }),
       })
@@ -552,11 +554,13 @@ export default function CommunityManagePage() {
       setAlertRecipientGroup('members')
       setAlertSelectedMembers([])
       setAlertSendEmail(true)
+      setAlertSendSms(false)
       setAlertSendAppAlert(true)
 
       const deliveryMethods = []
       if (alertSendAppAlert) deliveryMethods.push('app alert')
       if (alertSendEmail && data.emailsSent > 0) deliveryMethods.push(`${data.emailsSent} email${data.emailsSent > 1 ? 's' : ''}`)
+      if (alertSendSms && data.smsSent > 0) deliveryMethods.push(`${data.smsSent} SMS`)
 
       setSuccess(`Alert sent to ${data.recipientCount} recipient${data.recipientCount > 1 ? 's' : ''} (${deliveryMethods.join(', ')})`)
       setTimeout(() => setSuccess(null), 5000)
@@ -1443,11 +1447,14 @@ export default function CommunityManagePage() {
                       onChange={(e) => setAlertSendAppAlert(e.target.checked)}
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
-                    <div>
-                      <span className="font-medium text-sm">App Alert</span>
-                      <p className="text-xs text-muted-foreground">
-                        Displayed in the recipient&apos;s dashboard alerts section
-                      </p>
+                    <div className="flex items-start gap-2">
+                      <Bell className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">App Alert</span>
+                        <p className="text-xs text-muted-foreground">
+                          Displayed in the recipient&apos;s dashboard alerts section
+                        </p>
+                      </div>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
@@ -1457,11 +1464,31 @@ export default function CommunityManagePage() {
                       onChange={(e) => setAlertSendEmail(e.target.checked)}
                       className="mt-0.5 h-4 w-4 rounded border-border"
                     />
-                    <div>
-                      <span className="font-medium text-sm">Email</span>
-                      <p className="text-xs text-muted-foreground">
-                        Send an email notification to all selected recipients
-                      </p>
+                    <div className="flex items-start gap-2">
+                      <Mail className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">Email</span>
+                        <p className="text-xs text-muted-foreground">
+                          Send an email notification to all selected recipients
+                        </p>
+                      </div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 rounded-lg border border-border cursor-pointer hover:bg-muted/50">
+                    <input
+                      type="checkbox"
+                      checked={alertSendSms}
+                      onChange={(e) => setAlertSendSms(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-border"
+                    />
+                    <div className="flex items-start gap-2">
+                      <MessageSquare className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                      <div>
+                        <span className="font-medium text-sm">SMS</span>
+                        <p className="text-xs text-muted-foreground">
+                          Send SMS to recipients with phone numbers on file
+                        </p>
+                      </div>
                     </div>
                   </label>
                 </div>
@@ -1509,7 +1536,7 @@ export default function CommunityManagePage() {
                 <Button
                   className="flex-1"
                   onClick={handleSendAlert}
-                  disabled={isSendingAlert || !alertTitle.trim() || !alertMessage.trim() || (!alertSendEmail && !alertSendAppAlert)}
+                  disabled={isSendingAlert || !alertTitle.trim() || !alertMessage.trim() || (!alertSendEmail && !alertSendSms && !alertSendAppAlert)}
                   style={{
                     backgroundColor: ALERT_LEVEL_CONFIG[alertLevel].color,
                   }}
