@@ -10,8 +10,13 @@ function getSupabaseUrl() {
 }
 
 function getSupabaseServiceKey() {
-  const key = process.env.SUPABASE_SERVICE_KEY
+  const key = process.env.SUPABASE_SERVICE_KEY?.trim()
   if (!key) throw new Error('Missing SUPABASE_SERVICE_KEY')
+  // Service role keys are JWTs and should be ~200+ chars
+  if (key.length < 100) {
+    console.error(`SUPABASE_SERVICE_KEY appears invalid (length: ${key.length}). Expected a JWT token ~200+ chars.`)
+    console.error('Please copy the service_role key from Supabase Dashboard > Settings > API')
+  }
   return key
 }
 
