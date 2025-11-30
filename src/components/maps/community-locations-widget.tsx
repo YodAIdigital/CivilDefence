@@ -27,7 +27,7 @@ export function CommunityLocationsWidget({
   maxHeight = '400px',
 }: CommunityLocationsWidgetProps) {
   const { user } = useAuth()
-  const { activeCommunity, communities } = useCommunity()
+  const { activeCommunity } = useCommunity()
   const [locations, setLocations] = useState<CommunityMapPoint[]>([])
   const [communityRegions, setCommunityRegions] = useState<CommunityRegionData[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -48,8 +48,8 @@ export function CommunityLocationsWidget({
     try {
       setIsLoading(true)
 
-      // Get all community IDs the user is a member of
-      const communityIds = communities.map(c => c.id)
+      // Use active community if available, otherwise show nothing
+      const communityIds = activeCommunity ? [activeCommunity.id] : []
 
       if (communityIds.length === 0) {
         setLocations([])
@@ -58,7 +58,7 @@ export function CommunityLocationsWidget({
         return
       }
 
-      // Fetch map points from all communities the user belongs to
+      // Fetch map points from the active community
       // RLS will handle visibility filtering based on user's role
       const supabaseAny = supabase as unknown as {
         from: (table: string) => {
@@ -86,7 +86,7 @@ export function CommunityLocationsWidget({
         setLocations(data || [])
       }
 
-      // Fetch community regions
+      // Fetch community region for active community
       const { data: regionsData } = await supabase
         .from('communities')
         .select('id, name, region_polygon, region_color, region_opacity')
@@ -102,7 +102,7 @@ export function CommunityLocationsWidget({
     } finally {
       setIsLoading(false)
     }
-  }, [user, communities])
+  }, [user, activeCommunity])
 
   useEffect(() => {
     fetchLocations()
@@ -130,11 +130,6 @@ export function CommunityLocationsWidget({
 
   // Get meeting points for map centering
   const meetingPoints = locations.filter(l => l.point_type === 'meeting_point')
-
-  // Get community name for a location
-  const getCommunityName = (communityId: string) => {
-    return communities.find(c => c.id === communityId)?.name || 'Unknown'
-  }
 
   // Toggle visibility of a location type
   const toggleType = (type: MapPointType) => {
@@ -242,14 +237,14 @@ export function CommunityLocationsWidget({
     <div className="rounded-xl bg-card border border-border overflow-hidden">
       {showHeader && (
         <div className="p-4 border-b border-border">
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <span className="material-icons text-green-500">map</span>
                 Community Locations
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Key locations from your communities
+                Key locations from your community
               </p>
             </div>
             {/* Search Input */}
@@ -257,7 +252,7 @@ export function CommunityLocationsWidget({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search locations..."
+                placeholder="Search Community"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
@@ -281,9 +276,10 @@ export function CommunityLocationsWidget({
           markers={markers}
           regions={regions}
           showRegions={showRegions}
-          height="300px"
+          height="450px"
           {...(mapCenter && { center: mapCenter })}
           zoom={markers.length === 1 ? 14 : 11}
+          fitToRegions={regions.length > 0}
         />
         {/* Region toggle button */}
         {regions.length > 0 && (
@@ -297,7 +293,7 @@ export function CommunityLocationsWidget({
             title={showRegions ? 'Hide community regions' : 'Show community regions'}
           >
             <Layers className="h-3.5 w-3.5" />
-            Regions
+            Region
           </button>
         )}
         {/* Dynamic Legend based on location types present - clickable to toggle */}
@@ -376,7 +372,7 @@ export function CommunityLocationsWidget({
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm truncate">{location.name}</p>
                   <p className="text-xs text-muted-foreground truncate">
-                    {config.label} • {getCommunityName(location.community_id)}
+                    {config.label}
                   </p>
                 </div>
                 <a

@@ -1047,6 +1047,27 @@ export default function CommunityManagePage() {
             </div>
           </div>
 
+          {/* Key Contacts & Roles Section */}
+          <div className="rounded-xl border border-border bg-card">
+            <div className="border-b border-border p-4">
+              <h2 className="flex items-center gap-2 text-lg font-semibold">
+                <span className="material-icons text-[#FEB100]">contact_phone</span>
+                Key Contacts & Roles
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Define key roles and contacts for your community. These will be visible to all members.
+              </p>
+            </div>
+            <div className="p-4">
+              <ContactsManager
+                contacts={contacts}
+                members={members}
+                onSave={saveContacts}
+                isSaving={isSavingContacts}
+              />
+            </div>
+          </div>
+
           {/* Help Text */}
           <div className="rounded-xl border border-border bg-card p-5">
             <h3 className="flex items-center gap-2 font-semibold">
@@ -1129,8 +1150,6 @@ export default function CommunityManagePage() {
             <div className="p-4">
               <RegionEditor
                 initialPolygon={(community as Record<string, unknown>)?.region_polygon as RegionPolygon | null}
-                initialColor={((community as Record<string, unknown>)?.region_color as string) || '#3b82f6'}
-                initialOpacity={((community as Record<string, unknown>)?.region_opacity as number) || 0.2}
                 center={community?.latitude && community?.longitude
                   ? { lat: community.latitude, lng: community.longitude }
                   : undefined
@@ -1164,27 +1183,6 @@ export default function CommunityManagePage() {
                   isSaving={isSavingMapPoints}
                 />
               )}
-            </div>
-          </div>
-
-          {/* Community Contacts Section */}
-          <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border p-4">
-              <h2 className="flex items-center gap-2 text-lg font-semibold">
-                <span className="material-icons text-[#FEB100]">contact_phone</span>
-                Key Contacts & Roles
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                Define key roles and contacts for your community. These will be visible to all members.
-              </p>
-            </div>
-            <div className="p-4">
-              <ContactsManager
-                contacts={contacts}
-                members={members}
-                onSave={saveContacts}
-                isSaving={isSavingContacts}
-              />
             </div>
           </div>
         </div>

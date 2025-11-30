@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@supabase/supabase-js'
 import { sendEmail, getCommunityAlertEmail } from '@/lib/email'
+
+// Create admin client dynamically to ensure env vars are read at runtime
+function getAdminClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_KEY
+
+  console.log('Supabase config check:', {
+    hasUrl: !!url,
+    hasKey: !!key,
+    urlPrefix: url?.substring(0, 30)
+  })
+
+  if (!url || !key) {
+    throw new Error(`Missing Supabase configuration: URL=${!!url}, KEY=${!!key}`)
+  }
+
+  return createClient(url, key, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
+    }
+  })
+}
 
 type AlertLevel = 'info' | 'warning' | 'danger'
 type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
@@ -19,7 +42,7 @@ interface AlertRequest {
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = createAdminClient()
+    const supabase = getAdminClient()
 
     const body: AlertRequest = await request.json()
     const {
@@ -43,21 +66,41 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify sender is admin of the community
+    console.log('Checking membership for:', { communityId, senderId })
+
     const { data: senderMembership, error: membershipError } = await supabase
       .from('community_members')
-      .select('role')
+      .select('role, user_id, community_id')
       .eq('community_id', communityId)
       .eq('user_id', senderId)
       .single()
 
-    if (membershipError || !senderMembership) {
+    console.log('Membership result:', JSON.stringify({ senderMembership, membershipError }, null, 2))
+
+    // Also check if user is the community creator
+    const { data: communityCreator } = await supabase
+      .from('communities')
+      .select('created_by')
+      .eq('id', communityId)
+      .single()
+
+    console.log('Community creator:', communityCreator?.created_by, 'Sender:', senderId, 'Match:', communityCreator?.created_by === senderId)
+
+    const isCreator = communityCreator?.created_by === senderId
+    const isMember = !membershipError && senderMembership
+    const isAdmin = isMember && senderMembership.role === 'admin'
+
+    console.log('Permission check:', { isCreator, isMember, isAdmin })
+
+    if (!isMember && !isCreator) {
       return NextResponse.json(
         { error: 'You are not a member of this community' },
         { status: 403 }
       )
     }
 
-    if (senderMembership.role !== 'admin' && senderMembership.role !== 'super_admin') {
+    // Only admins or creators can send alerts
+    if (!isAdmin && !isCreator) {
       return NextResponse.json(
         { error: 'Only community admins can send alerts' },
         { status: 403 }

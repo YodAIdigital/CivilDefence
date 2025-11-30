@@ -2,13 +2,14 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { WeatherWidget } from '@/components/weather/weather-widget'
 import { EventCalendar } from '@/components/calendar/event-calendar'
 import { PreparednessWidget } from '@/components/dashboard/preparedness-widget'
 import { PDFExportWidget } from '@/components/dashboard/pdf-export-widget'
 import { CommunityLocationsWidget } from '@/components/maps/community-locations-widget'
 import { useAuth } from '@/contexts/auth-context'
+import { useNotifications } from '@/contexts/notification-context'
 import { supabase } from '@/lib/supabase/client'
 import type { AlertLevel } from '@/types/database'
 
@@ -19,6 +20,7 @@ interface Alert {
   message: string
   timestamp: Date
   communityName?: string | undefined
+  level?: AlertLevel
 }
 
 interface DBAlert {
@@ -72,10 +74,39 @@ function mapAlertLevel(level: AlertLevel): 'warning' | 'info' | 'emergency' {
   }
 }
 
+// Key for tracking which alerts we've already notified about
+const NOTIFIED_ALERTS_KEY = 'civildefence_notified_alerts'
+
+function getNotifiedAlerts(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = localStorage.getItem(NOTIFIED_ALERTS_KEY)
+    return stored ? JSON.parse(stored) : []
+  } catch {
+    return []
+  }
+}
+
+function saveNotifiedAlert(alertId: string) {
+  try {
+    const notified = getNotifiedAlerts()
+    if (!notified.includes(alertId)) {
+      notified.push(alertId)
+      // Keep only last 100 alert IDs to prevent localStorage bloat
+      const trimmed = notified.slice(-100)
+      localStorage.setItem(NOTIFIED_ALERTS_KEY, JSON.stringify(trimmed))
+    }
+  } catch {
+    // Ignore localStorage errors
+  }
+}
+
 export default function DashboardPage() {
   const { user } = useAuth()
+  const { sendAlertNotification, permission } = useNotifications()
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const hasInitialFetch = useRef(false)
 
   const fetchAlerts = useCallback(async () => {
     if (!user) {
@@ -129,19 +160,82 @@ export default function DashboardPage() {
           message: alert.content,
           timestamp: new Date(alert.created_at),
           communityName: alert.communities?.name,
+          level: alert.level, // Keep original level for notifications
         }))
 
       setAlerts(activeAlerts)
+
+      // Send push notifications for new alerts (only after initial load)
+      if (hasInitialFetch.current && permission === 'granted') {
+        const notifiedAlerts = getNotifiedAlerts()
+        for (const alert of activeAlerts) {
+          // Only notify for alerts we haven't notified about yet
+          // and that are less than 1 hour old
+          const alertAge = Date.now() - alert.timestamp.getTime()
+          const isRecent = alertAge < 60 * 60 * 1000 // 1 hour
+
+          if (!notifiedAlerts.includes(alert.id) && isRecent) {
+            const dbAlert = dbAlerts.find(a => a.id === alert.id)
+            const level = dbAlert?.level || 'info'
+            await sendAlertNotification(
+              alert.title,
+              alert.message,
+              level as 'info' | 'warning' | 'danger' | 'critical',
+              alert.id
+            )
+            saveNotifiedAlert(alert.id)
+          }
+        }
+      }
+      hasInitialFetch.current = true
     } catch (error) {
       console.error('Error fetching alerts:', error)
     } finally {
       setIsLoading(false)
     }
-  }, [user])
+  }, [user, permission, sendAlertNotification])
 
   useEffect(() => {
     fetchAlerts()
   }, [fetchAlerts])
+
+  // Subscribe to real-time alerts updates
+  useEffect(() => {
+    if (!user) return
+
+    // Set up real-time subscription for new alerts
+    const channel = supabase
+      .channel('alerts-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'alerts',
+        },
+        () => {
+          // Refetch alerts when a new one is inserted
+          fetchAlerts()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'alerts',
+        },
+        () => {
+          // Refetch when an alert is updated (e.g., deactivated)
+          fetchAlerts()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [user, fetchAlerts])
 
   const dismissAlert = async (alertId: string) => {
     saveDismissedAlert(alertId)

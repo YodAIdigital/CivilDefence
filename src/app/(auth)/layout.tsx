@@ -8,6 +8,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
 import { Logo } from '@/components/custom/logo'
+import { VersionDisplay } from '@/components/version-display'
 import type { Route } from 'next'
 
 interface AuthLayoutProps {
@@ -322,6 +323,9 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             </button>
           )}
         </div>
+
+        {/* Version Display */}
+        <VersionDisplay collapsed={isCollapsed} />
       </aside>
 
       {/* Main Content */}

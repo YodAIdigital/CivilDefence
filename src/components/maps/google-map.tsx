@@ -32,6 +32,7 @@ interface GoogleMapProps {
   onMarkerClick?: (marker: MapMarker) => void
   selectedMarkerId?: string
   showRegions?: boolean
+  fitToRegions?: boolean // If true, fit map bounds to include all regions
 }
 
 const DEFAULT_CENTER = { lat: -41.2865, lng: 174.7762 } // Wellington, NZ
@@ -55,7 +56,8 @@ export function GoogleMap({
   onMapClick,
   onMarkerClick,
   selectedMarkerId,
-  showRegions = true
+  showRegions = true,
+  fitToRegions = false
 }: GoogleMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<google.maps.Map | null>(null)
@@ -182,6 +184,9 @@ export function GoogleMap({
     // Don't render if showRegions is false
     if (!showRegions) return
 
+    // Collect all region bounds for fitToRegions
+    const allBounds = fitToRegions ? new google.maps.LatLngBounds() : null
+
     // Add region polygons
     regions.forEach(region => {
       if (!region.polygon || region.polygon.length < 3) return
@@ -211,9 +216,19 @@ export function GoogleMap({
         }
       })
 
+      // Extend bounds with region coordinates
+      if (allBounds) {
+        region.polygon.forEach(c => allBounds.extend({ lat: c.lat, lng: c.lng }))
+      }
+
       polygonsRef.current.push(polygon)
     })
-  }, [regions, isLoaded, showRegions])
+
+    // Fit map to region bounds if fitToRegions is enabled and we have regions
+    if (fitToRegions && allBounds && regions.length > 0 && mapInstanceRef.current) {
+      mapInstanceRef.current.fitBounds(allBounds, 50)
+    }
+  }, [regions, isLoaded, showRegions, fitToRegions])
 
   // Update center when prop changes
   useEffect(() => {

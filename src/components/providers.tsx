@@ -2,6 +2,8 @@
 
 import { AuthProvider } from '@/contexts/auth-context'
 import { CommunityProvider } from '@/contexts/community-context'
+import { NotificationProvider } from '@/contexts/notification-context'
+import { NotificationPermissionBanner } from '@/components/notifications/notification-permission-banner'
 import { type ReactNode, useState, useEffect } from 'react'
 
 interface ProvidersProps {
@@ -31,7 +33,12 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <AuthProvider>
-      <CommunityProvider>{children}</CommunityProvider>
+      <CommunityProvider>
+        <NotificationProvider>
+          {children}
+          <NotificationPermissionBanner />
+        </NotificationProvider>
+      </CommunityProvider>
     </AuthProvider>
   )
 }
