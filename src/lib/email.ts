@@ -1,15 +1,37 @@
 import nodemailer from 'nodemailer'
+import type { Transporter } from 'nodemailer'
 
-// Create reusable transporter
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // Use TLS
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD,
-  },
-})
+// Lazy-loaded transporter to ensure env vars are available at runtime
+let transporter: Transporter | null = null
+
+function getTransporter(): Transporter | null {
+  if (transporter) return transporter
+
+  const host = process.env.SMTP_HOST
+  const user = process.env.SMTP_USER
+  const pass = process.env.SMTP_PASSWORD
+
+  if (!host || !user || !pass) {
+    console.error('Missing SMTP configuration:', {
+      host: !!host,
+      user: !!user,
+      pass: !!pass,
+    })
+    return null
+  }
+
+  transporter = nodemailer.createTransport({
+    host,
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: false, // Use TLS
+    auth: {
+      user,
+      pass,
+    },
+  })
+
+  return transporter
+}
 
 interface EmailOptions {
   to: string
@@ -19,11 +41,18 @@ interface EmailOptions {
 }
 
 export async function sendEmail({ to, subject, html, text }: EmailOptions): Promise<boolean> {
+  const transport = getTransporter()
+
+  if (!transport) {
+    console.error('Email service not configured - missing SMTP environment variables')
+    return false
+  }
+
   try {
     const fromName = process.env.SMTP_FROM_NAME || 'CivilDefence'
     const fromEmail = process.env.SMTP_FROM_EMAIL || 'noreply@civildefence.app'
 
-    await transporter.sendMail({
+    const result = await transport.sendMail({
       from: `"${fromName}" <${fromEmail}>`,
       to,
       subject,
@@ -31,6 +60,7 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions): Prom
       text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML for text version
     })
 
+    console.log(`Email sent successfully to ${to}, messageId: ${result.messageId}`)
     return true
   } catch (error) {
     console.error('Failed to send email:', error)

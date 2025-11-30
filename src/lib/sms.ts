@@ -22,7 +22,11 @@ export async function sendSms({ to, message }: SmsOptions): Promise<SmsResult> {
   const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
 
   if (!accountSid || !authToken || !messagingServiceSid) {
-    console.error('Missing Twilio configuration')
+    console.error('Missing Twilio configuration:', {
+      accountSid: !!accountSid,
+      authToken: !!authToken,
+      messagingServiceSid: !!messagingServiceSid,
+    })
     return { success: false, error: 'SMS service not configured' }
   }
 

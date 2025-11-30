@@ -33,9 +33,32 @@ interface NotificationContextValue {
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined)
 
 const PERMISSION_BANNER_DISMISSED_KEY = 'cde_notification_banner_dismissed'
+// How long to wait before showing the banner again (7 days in milliseconds)
+const BANNER_DISMISS_DURATION = 7 * 24 * 60 * 60 * 1000
 
 interface NotificationProviderProps {
   children: ReactNode
+}
+
+// Helper to check if banner was dismissed and if dismissal is still valid
+function isBannerDismissedValid(): boolean {
+  if (typeof window === 'undefined') return true
+  try {
+    const dismissedAt = localStorage.getItem(PERMISSION_BANNER_DISMISSED_KEY)
+    if (!dismissedAt) return false
+
+    // If it's the old format (just 'true'), treat as permanently dismissed
+    if (dismissedAt === 'true') return true
+
+    // Check if the dismissal has expired
+    const dismissedTime = parseInt(dismissedAt, 10)
+    if (isNaN(dismissedTime)) return false
+
+    const now = Date.now()
+    return (now - dismissedTime) < BANNER_DISMISS_DURATION
+  } catch {
+    return false
+  }
 }
 
 export function NotificationProvider({ children }: NotificationProviderProps) {
@@ -59,9 +82,10 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         // Register service worker
         await registerServiceWorker()
 
-        // Check if banner was dismissed
-        const dismissed = localStorage.getItem(PERMISSION_BANNER_DISMISSED_KEY)
-        setBannerDismissed(dismissed === 'true' || currentPermission === 'granted')
+        // Check if banner was dismissed (and dismissal is still valid)
+        // Also don't show if permission is already granted or denied
+        const dismissed = currentPermission === 'granted' || currentPermission === 'denied' || isBannerDismissedValid()
+        setBannerDismissed(dismissed)
       }
 
       setIsLoading(false)
@@ -105,10 +129,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     [permission]
   )
 
-  // Dismiss the permission banner
+  // Dismiss the permission banner (stores timestamp for timed re-display)
   const dismissPermissionBanner = useCallback(() => {
     setBannerDismissed(true)
-    localStorage.setItem(PERMISSION_BANNER_DISMISSED_KEY, 'true')
+    // Store timestamp so we can show again after BANNER_DISMISS_DURATION
+    localStorage.setItem(PERMISSION_BANNER_DISMISSED_KEY, Date.now().toString())
   }, [])
 
   // Show banner if: supported, not granted, and not dismissed
