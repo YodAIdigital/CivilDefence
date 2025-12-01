@@ -108,7 +108,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex min-h-screen bg-background overflow-x-hidden">
       {/* Mobile Top Navigation */}
       <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
         <Link href="/dashboard">
@@ -539,7 +539,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
       {/* Main Content */}
       <div
-        className={`flex flex-1 flex-col transition-all duration-300 ${
+        className={`flex flex-1 flex-col min-w-0 transition-all duration-300 ${
           isCollapsed ? 'md:ml-16' : 'md:ml-60'
         }`}
       >

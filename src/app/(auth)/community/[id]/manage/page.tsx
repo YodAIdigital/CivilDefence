@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
 import { RegionEditor } from '@/components/maps/region-editor'
-import { Search, UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown } from 'lucide-react'
+import { MemberSearchFilter, MemberExtendedInfo } from '@/components/community/member-search-filter'
+import { UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon } from '@/types/database'
@@ -129,8 +130,8 @@ export default function CommunityManagePage() {
   const [alertHistory, setAlertHistory] = useState<AlertHistoryItem[]>([])
   const [_isLoadingAlertHistory, _setIsLoadingAlertHistory] = useState(false)
 
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('')
+  // Filter state - filteredMembers is managed by MemberSearchFilter component
+  const [displayedMembers, setDisplayedMembers] = useState<CommunityMemberWithProfile[]>([])
 
   // Invite modal state
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -347,16 +348,10 @@ export default function CommunityManagePage() {
     fetchData()
   }, [fetchData])
 
-  // Filter members based on search query
-  const filteredMembers = useMemo(() => {
-    if (!searchQuery.trim()) return members
-    const query = searchQuery.toLowerCase()
-    return members.filter(member => {
-      const name = member.profile?.full_name?.toLowerCase() || ''
-      const email = member.profile?.email?.toLowerCase() || ''
-      return name.includes(query) || email.includes(query)
-    })
-  }, [members, searchQuery])
+  // Handler for when MemberSearchFilter updates the filtered results
+  const handleFilteredMembersChange = useCallback((filtered: CommunityMemberWithProfile[]) => {
+    setDisplayedMembers(filtered)
+  }, [])
 
   const updateMemberRole = async (memberId: string, newRole: CommunityRole) => {
     try {
@@ -1313,23 +1308,19 @@ export default function CommunityManagePage() {
               <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['members'] ? '-rotate-90' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['members'] ? 'max-h-0' : 'max-h-[3000px]'}`}>
-            <div className="border-b border-border p-4">
-              {/* Search Bar and Invite Button - Inline */}
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search members by name or email..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-                <Button onClick={() => setShowInviteModal(true)} className="gap-2 shrink-0">
+            <div className="border-b border-border p-4 space-y-4">
+              {/* Invite Button */}
+              <div className="flex justify-end">
+                <Button onClick={() => setShowInviteModal(true)} className="gap-2">
                   <UserPlus className="h-4 w-4" />
                   Invite Member
                 </Button>
               </div>
+              {/* Advanced Search and Filter */}
+              <MemberSearchFilter
+                members={members}
+                onFilteredMembersChange={handleFilteredMembersChange}
+              />
             </div>
 
             {/* Pending Invitations */}
@@ -1387,79 +1378,91 @@ export default function CommunityManagePage() {
             )}
 
             <div className="divide-y divide-border">
-              {filteredMembers.length === 0 ? (
+              {displayedMembers.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
-                  {searchQuery ? 'No members found matching your search' : 'No members yet'}
+                  {members.length === 0 ? 'No members yet' : 'No members found matching your filters'}
                 </div>
               ) : (
-                filteredMembers.map(member => {
+                displayedMembers.map(member => {
                   const isCurrentUser = member.user_id === user?.id
                   const roleConfig = COMMUNITY_ROLE_CONFIG[member.role as keyof typeof COMMUNITY_ROLE_CONFIG]
 
                   return (
                     <div
                       key={member.id}
-                      className="flex items-center justify-between p-4 hover:bg-muted/50"
+                      className="p-4 hover:bg-muted/50"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                          <span className="material-icons text-primary">person</span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">
-                              {member.profile?.full_name || member.profile?.email || 'Unknown User'}
-                            </span>
-                            {isCurrentUser && (
-                              <span className="text-xs text-muted-foreground">(You)</span>
-                            )}
-                            {member.role !== 'member' && roleConfig && (
-                              <span
-                                className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                                style={{
-                                  backgroundColor: `${roleConfig.color}20`,
-                                  color: roleConfig.color
-                                }}
-                              >
-                                <span className="material-icons text-xs">{roleConfig.icon}</span>
-                                {roleConfig.label}
-                              </span>
-                            )}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                            <span className="material-icons text-primary">person</span>
                           </div>
-                          <p className="text-sm text-muted-foreground">
-                            {member.profile?.email}
-                          </p>
+                          <div>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">
+                                {member.profile?.full_name || member.profile?.email || 'Unknown User'}
+                              </span>
+                              {isCurrentUser && (
+                                <span className="text-xs text-muted-foreground">(You)</span>
+                              )}
+                              {member.role !== 'member' && roleConfig && (
+                                <span
+                                  className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
+                                  style={{
+                                    backgroundColor: `${roleConfig.color}20`,
+                                    color: roleConfig.color
+                                  }}
+                                >
+                                  <span className="material-icons text-xs">{roleConfig.icon}</span>
+                                  {roleConfig.label}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                              <span>{member.profile?.email}</span>
+                              {member.profile?.phone && (
+                                <span className="flex items-center gap-1">
+                                  <span className="material-icons text-xs">phone</span>
+                                  {member.profile.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {/* Role selector */}
+                          <select
+                            value={member.role}
+                            onChange={(e) => updateMemberRole(member.id, e.target.value as CommunityRole)}
+                            disabled={updatingMemberId === member.id}
+                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+                          >
+                            <option value="member">Member</option>
+                            <option value="team_member">Team Member</option>
+                            <option value="admin">Admin</option>
+                          </select>
+
+                          {/* Remove button */}
+                          {!isCurrentUser && (
+                            <button
+                              onClick={() => removeMember(member.id, member.user_id)}
+                              disabled={updatingMemberId === member.id}
+                              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
+                              title="Remove member"
+                            >
+                              {updatingMemberId === member.id ? (
+                                <span className="material-icons animate-spin text-lg">sync</span>
+                              ) : (
+                                <span className="material-icons text-lg">person_remove</span>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        {/* Role selector */}
-                        <select
-                          value={member.role}
-                          onChange={(e) => updateMemberRole(member.id, e.target.value as CommunityRole)}
-                          disabled={updatingMemberId === member.id}
-                          className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-                        >
-                          <option value="member">Member</option>
-                          <option value="team_member">Team Member</option>
-                          <option value="admin">Admin</option>
-                        </select>
-
-                        {/* Remove button */}
-                        {!isCurrentUser && (
-                          <button
-                            onClick={() => removeMember(member.id, member.user_id)}
-                            disabled={updatingMemberId === member.id}
-                            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
-                            title="Remove member"
-                          >
-                            {updatingMemberId === member.id ? (
-                              <span className="material-icons animate-spin text-lg">sync</span>
-                            ) : (
-                              <span className="material-icons text-lg">person_remove</span>
-                            )}
-                          </button>
-                        )}
+                      {/* Extended Info (skills, disabilities, equipment) */}
+                      <div className="ml-13 pl-13">
+                        <MemberExtendedInfo profile={member.profile} />
                       </div>
                     </div>
                   )

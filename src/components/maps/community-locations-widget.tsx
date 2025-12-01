@@ -237,8 +237,8 @@ export function CommunityLocationsWidget({
     <div className="rounded-xl bg-card border border-border overflow-hidden">
       {showHeader && (
         <div className="p-4 border-b border-border">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <span className="material-icons text-green-500">map</span>
                 Community Locations
@@ -248,7 +248,7 @@ export function CommunityLocationsWidget({
               </p>
             </div>
             {/* Search Input */}
-            <div className="relative flex-shrink-0 w-64">
+            <div className="relative w-full sm:w-64 sm:flex-shrink-0">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 type="text"
