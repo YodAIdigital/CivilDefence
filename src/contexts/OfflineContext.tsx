@@ -67,6 +67,9 @@ interface OfflineProviderProps {
   children: React.ReactNode
 }
 
+// Minimum time between syncs (5 minutes)
+const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000
+
 export function OfflineProvider({ children }: OfflineProviderProps) {
   const { user } = useAuth()
   const { isOffline, justReconnected } = useOffline()
@@ -90,6 +93,8 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
   // Refs to prevent duplicate syncs
   const syncInProgressRef = useRef(false)
   const initialSyncDone = useRef(false)
+  const lastSyncTimeRef = useRef<number>(0)
+  const userIdRef = useRef<string | null>(null)
 
   // Subscribe to sync progress
   useEffect(() => {
@@ -100,16 +105,14 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     return unsubscribe
   }, [])
 
-  // Load cached data from IndexedDB on mount
-  const loadCachedData = useCallback(async () => {
-    if (!user?.id) return
-
+  // Load cached data from IndexedDB on mount - defined before use
+  const loadCachedData = useCallback(async (userId: string) => {
     try {
       const [profileData, communitiesData, guidesData, contactsData] = await Promise.all([
-        getProfile(user.id),
+        getProfile(userId),
         getCommunities(),
         getAllGuides(),
-        getEmergencyContacts(user.id),
+        getEmergencyContacts(userId),
       ])
 
       if (profileData) setCachedProfile(profileData)
@@ -129,16 +132,46 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       console.error('Failed to load cached data:', error)
       setIsDataLoaded(true)
     }
-  }, [user?.id])
+  }, [])
 
   // Load cached data when user is available
   useEffect(() => {
-    if (user?.id) {
-      loadCachedData()
+    if (user?.id && user.id !== userIdRef.current) {
+      userIdRef.current = user.id
+      loadCachedData(user.id)
     }
   }, [user?.id, loadCachedData])
 
-  // Sync when coming back online
+  // Sync function - defined before effects that use it
+  const sync = useCallback(async (): Promise<SyncResult | null> => {
+    const userId = user?.id
+    if (!userId || isOffline || syncInProgressRef.current) {
+      return null
+    }
+
+    // Check if we synced recently
+    const now = Date.now()
+    if (now - lastSyncTimeRef.current < MIN_SYNC_INTERVAL_MS) {
+      console.log('[OfflineContext] Skipping sync - synced recently')
+      return null
+    }
+
+    syncInProgressRef.current = true
+    lastSyncTimeRef.current = now
+
+    try {
+      const result = await syncService.fullSync(userId)
+
+      // Reload cached data after sync
+      await loadCachedData(userId)
+
+      return result
+    } finally {
+      syncInProgressRef.current = false
+    }
+  }, [user?.id, isOffline, loadCachedData])
+
+  // Sync when coming back online (only once per reconnection)
   useEffect(() => {
     if (justReconnected && user?.id && !syncInProgressRef.current) {
       // Delay to ensure network is stable
@@ -147,9 +180,9 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       }, 2000)
       return () => clearTimeout(timer)
     }
-  }, [justReconnected, user?.id])
+  }, [justReconnected, user?.id, sync])
 
-  // Initial sync when user logs in (if online)
+  // Initial sync when user logs in (if online) - only once
   useEffect(() => {
     if (user?.id && !isOffline && !initialSyncDone.current && !syncInProgressRef.current) {
       initialSyncDone.current = true
@@ -159,7 +192,7 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       }, 3000)
       return () => clearTimeout(timer)
     }
-  }, [user?.id, isOffline])
+  }, [user?.id, isOffline, sync])
 
   // Listen for service worker sync messages
   useEffect(() => {
@@ -177,26 +210,7 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleMessage)
     }
-  }, [isOffline, user?.id])
-
-  // Sync function
-  const sync = useCallback(async (): Promise<SyncResult | null> => {
-    if (!user?.id || isOffline || syncInProgressRef.current) {
-      return null
-    }
-
-    syncInProgressRef.current = true
-    try {
-      const result = await syncService.fullSync(user.id)
-
-      // Reload cached data after sync
-      await loadCachedData()
-
-      return result
-    } finally {
-      syncInProgressRef.current = false
-    }
-  }, [user?.id, isOffline, loadCachedData])
+  }, [isOffline, user?.id, sync])
 
   // Cache management functions
   const cacheProfile = useCallback(async (data: OfflineProfile) => {

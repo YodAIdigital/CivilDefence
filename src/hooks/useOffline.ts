@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 /**
  * Custom hook for detecting online/offline status
@@ -8,19 +8,29 @@ import { useState, useEffect, useCallback } from 'react'
  */
 export function useOffline() {
   const [isOffline, setIsOffline] = useState(false)
-  const [wasOffline, setWasOffline] = useState(false)
+  const [justReconnected, setJustReconnected] = useState(false)
+  const reconnectHandledRef = useRef(false)
 
   const handleOnline = useCallback(() => {
-    if (isOffline) {
-      setWasOffline(true)
-      // Reset wasOffline after 5 seconds to hide reconnection message
-      setTimeout(() => setWasOffline(false), 5000)
-    }
     setIsOffline(false)
-  }, [isOffline])
+    // Only set justReconnected once per reconnection event
+    if (!reconnectHandledRef.current) {
+      reconnectHandledRef.current = true
+      setJustReconnected(true)
+      // Reset justReconnected after a short delay (just long enough for one sync trigger)
+      setTimeout(() => {
+        setJustReconnected(false)
+        // Allow future reconnections to trigger again
+        setTimeout(() => {
+          reconnectHandledRef.current = false
+        }, 1000)
+      }, 100)
+    }
+  }, [])
 
   const handleOffline = useCallback(() => {
     setIsOffline(true)
+    reconnectHandledRef.current = false // Reset so next reconnect can trigger
   }, [])
 
   useEffect(() => {
@@ -41,8 +51,7 @@ export function useOffline() {
   return {
     isOffline,
     isOnline: !isOffline,
-    wasOffline,
-    justReconnected: wasOffline && !isOffline
+    justReconnected
   }
 }
 

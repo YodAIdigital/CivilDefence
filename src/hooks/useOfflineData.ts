@@ -360,6 +360,7 @@ export function useOfflineEmergencyContacts(userId: string | null) {
 }
 
 // Main hook for sync management
+// NOTE: Prefer using OfflineContext instead of this hook to avoid duplicate syncs
 export function useOfflineSync(userId: string | null) {
   const [syncProgress, setSyncProgress] = useState<SyncProgress>({
     status: 'idle',
@@ -367,7 +368,7 @@ export function useOfflineSync(userId: string | null) {
   })
   const [lastSyncTime, setLastSyncTime] = useState<number | null>(null)
   const [pendingCount, setPendingCount] = useState(0)
-  const { isOffline, justReconnected } = useOffline()
+  const { isOffline } = useOffline()
   const syncInProgressRef = useRef(false)
 
   // Subscribe to sync progress
@@ -406,16 +407,8 @@ export function useOfflineSync(userId: string | null) {
     }
   }, [userId, isOffline, refreshSyncStatus])
 
-  // Auto-sync when coming back online
-  useEffect(() => {
-    if (justReconnected && userId && !syncInProgressRef.current) {
-      // Small delay to ensure network is stable
-      const timer = setTimeout(() => {
-        sync()
-      }, 2000)
-      return () => clearTimeout(timer)
-    }
-  }, [justReconnected, userId, sync])
+  // NOTE: Auto-sync on reconnect is handled by OfflineContext
+  // Removed from here to prevent duplicate syncs
 
   // Check if data is stale and needs sync
   const checkStaleData = useCallback(
