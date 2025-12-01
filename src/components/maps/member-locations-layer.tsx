@@ -55,6 +55,7 @@ interface MemberLocationsLayerProps {
   onMembersChange: (markers: MapMarker[], members: CommunityMemberWithLocation[]) => void
   showMemberLocations: boolean
   onToggleShowMembers: () => void
+  hideToggle?: boolean // When true, hides the show/hide toggle button (parent controls visibility)
   className?: string
 }
 
@@ -93,6 +94,7 @@ export function MemberLocationsLayer({
   onMembersChange,
   showMemberLocations,
   onToggleShowMembers,
+  hideToggle = false,
   className = '',
 }: MemberLocationsLayerProps) {
   const { user } = useAuth()
@@ -101,7 +103,8 @@ export function MemberLocationsLayer({
   const [allMembers, setAllMembers] = useState<CommunityMemberWithLocation[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [filters, setFilters] = useState<MemberFilters>(initialFilters)
-  const [showFilters, setShowFilters] = useState(false)
+  // When hideToggle is true, always show filters since parent controls visibility
+  const [showFilters, setShowFilters] = useState(hideToggle)
   const [expandedCategory, setExpandedCategory] = useState<FilterCategory | null>(null)
 
   // Get viewer's role
@@ -363,49 +366,75 @@ export function MemberLocationsLayer({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      {/* Toggle Member Locations */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={onToggleShowMembers}
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
-            showMemberLocations
-              ? 'border-primary bg-primary/10 text-primary'
-              : 'border-border bg-background hover:bg-muted'
-          }`}
-        >
-          {showMemberLocations ? (
-            <Eye className="h-4 w-4" />
-          ) : (
-            <EyeOff className="h-4 w-4" />
-          )}
-          <Users className="h-4 w-4" />
-          <span className="text-sm font-medium">
-            {showMemberLocations ? 'Showing Members' : 'Show Members'}
-          </span>
-          {showMemberLocations && allMembers.length > 0 && (
-            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs">
-              {filteredMembers.length}
-            </span>
-          )}
-        </button>
-
-        {showMemberLocations && (
-          <Button
-            variant={showFilters ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-            className="gap-1"
+      {/* Toggle Member Locations - hidden when parent controls visibility */}
+      {!hideToggle && (
+        <div className="flex items-center justify-between">
+          <button
+            onClick={onToggleShowMembers}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg border transition-colors ${
+              showMemberLocations
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-border bg-background hover:bg-muted'
+            }`}
           >
-            <Filter className="h-3.5 w-3.5" />
-            Filter
-            {activeFilterCount > 0 && (
-              <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground text-xs text-primary">
-                {activeFilterCount}
+            {showMemberLocations ? (
+              <Eye className="h-4 w-4" />
+            ) : (
+              <EyeOff className="h-4 w-4" />
+            )}
+            <Users className="h-4 w-4" />
+            <span className="text-sm font-medium">
+              {showMemberLocations ? 'Showing Members' : 'Show Members'}
+            </span>
+            {showMemberLocations && allMembers.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs">
+                {filteredMembers.length}
               </span>
             )}
-          </Button>
-        )}
-      </div>
+          </button>
+
+          {showMemberLocations && (
+            <Button
+              variant={showFilters ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-1"
+            >
+              <Filter className="h-3.5 w-3.5" />
+              Filter
+              {activeFilterCount > 0 && (
+                <span className="ml-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary-foreground text-xs text-primary">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {/* Header when hideToggle is true - shows member count */}
+      {hideToggle && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <Users className="h-4 w-4 text-purple-500" />
+            <span className="font-medium">Member Locations</span>
+            {allMembers.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 text-xs">
+                {filteredMembers.length} of {allMembers.length}
+              </span>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <button
+              onClick={clearAllFilters}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              <X className="h-3 w-3" />
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Loading State */}
       {showMemberLocations && isLoading && (
@@ -415,9 +444,9 @@ export function MemberLocationsLayer({
         </div>
       )}
 
-      {/* Filter Panel */}
-      {showMemberLocations && showFilters && !isLoading && (
-        <div className="rounded-lg border border-border bg-card p-3 space-y-3">
+      {/* Filter Panel - always show when hideToggle is true, otherwise respect showFilters */}
+      {showMemberLocations && (hideToggle || showFilters) && !isLoading && (
+        <div className={`space-y-3 ${hideToggle ? '' : 'rounded-lg border border-border bg-card p-3'}`}>
           {/* Search */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -438,8 +467,8 @@ export function MemberLocationsLayer({
             )}
           </div>
 
-          {/* Clear All */}
-          {hasActiveFilters && (
+          {/* Clear All - hidden when hideToggle since it's in the header */}
+          {hasActiveFilters && !hideToggle && (
             <div className="flex justify-end">
               <button
                 onClick={clearAllFilters}

@@ -263,37 +263,54 @@ export function CommunityLocationsWidget({
                 Key locations from your community
               </p>
             </div>
-            {/* Search Input */}
-            <div className="relative w-full sm:w-64 sm:flex-shrink-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search Community"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-8 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-              />
-              {searchQuery && (
+            {/* Search Input and Members Filter Button */}
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <div className="relative flex-1 sm:w-56">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search Community"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              {/* Members Filter Toggle Button */}
+              {activeCommunity && (
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setShowMemberLocations(!showMemberLocations)}
+                  className={`flex items-center justify-center h-10 w-10 rounded-lg border transition-colors flex-shrink-0 ${
+                    showMemberLocations
+                      ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20 text-purple-600'
+                      : 'border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                  title={showMemberLocations ? 'Hide member filters' : 'Show member locations'}
                 >
-                  <X className="h-4 w-4" />
+                  <Users className="h-5 w-5" />
                 </button>
               )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Member Locations Controls */}
-      {activeCommunity && (
-        <div className="p-4 border-b border-border bg-muted/30">
-          <MemberLocationsLayer
-            showMemberLocations={showMemberLocations}
-            onToggleShowMembers={() => setShowMemberLocations(!showMemberLocations)}
-            onMembersChange={handleMembersChange}
-          />
+          {/* Member Locations Filter Panel - shows when toggle is active */}
+          {activeCommunity && showMemberLocations && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <MemberLocationsLayer
+                showMemberLocations={showMemberLocations}
+                onToggleShowMembers={() => setShowMemberLocations(!showMemberLocations)}
+                onMembersChange={handleMembersChange}
+                hideToggle={true}
+              />
+            </div>
+          )}
         </div>
       )}
 

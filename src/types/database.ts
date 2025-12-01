@@ -539,6 +539,8 @@ export interface Database {
           location_lat: number | null
           location_lng: number | null
           use_meeting_point: boolean
+          is_online: boolean
+          meeting_link: string | null
           event_type: EventType
           visibility: EventVisibility
           created_by: string
@@ -562,6 +564,8 @@ export interface Database {
           location_lat?: number | null
           location_lng?: number | null
           use_meeting_point?: boolean
+          is_online?: boolean
+          meeting_link?: string | null
           event_type?: EventType
           visibility?: EventVisibility
           created_by: string
@@ -585,6 +589,8 @@ export interface Database {
           location_lat?: number | null
           location_lng?: number | null
           use_meeting_point?: boolean
+          is_online?: boolean
+          meeting_link?: string | null
           event_type?: EventType
           visibility?: EventVisibility
           created_by?: string

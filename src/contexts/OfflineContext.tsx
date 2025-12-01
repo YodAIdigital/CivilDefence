@@ -3,7 +3,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react'
 import { useAuth } from './auth-context'
 import { useOffline } from '@/hooks/useOffline'
-import { syncService, type SyncProgress, type SyncResult } from '@/lib/offline/syncService'
+import { syncService, type SyncProgress, type SyncResult, type ChangeCheckResult } from '@/lib/offline/syncService'
 import {
   saveProfile,
   saveCommunities,
@@ -35,6 +35,7 @@ interface OfflineContextType {
 
   // Actions
   sync: () => Promise<SyncResult | null>
+  checkForChanges: () => Promise<ChangeCheckResult | null>
   clearOfflineData: () => Promise<void>
 
   // Cached data
@@ -67,8 +68,8 @@ interface OfflineProviderProps {
   children: React.ReactNode
 }
 
-// Minimum time between syncs (5 minutes)
-const MIN_SYNC_INTERVAL_MS = 5 * 60 * 1000
+// Interval for checking for remote changes (1 minute)
+const CHANGE_CHECK_INTERVAL_MS = 60 * 1000
 
 export function OfflineProvider({ children }: OfflineProviderProps) {
   const { user } = useAuth()
@@ -90,11 +91,12 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
   const [cachedEmergencyContacts, setCachedEmergencyContacts] = useState<EmergencyContact[]>([])
   const [isDataLoaded, setIsDataLoaded] = useState(false)
 
-  // Refs to prevent duplicate syncs
+  // Refs to prevent duplicate syncs and track state
   const syncInProgressRef = useRef(false)
+  const checkInProgressRef = useRef(false)
   const initialSyncDone = useRef(false)
-  const lastSyncTimeRef = useRef<number>(0)
   const userIdRef = useRef<string | null>(null)
+  const changeCheckIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Subscribe to sync progress
   useEffect(() => {
@@ -142,24 +144,17 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     }
   }, [user?.id, loadCachedData])
 
-  // Sync function - defined before effects that use it
+  // Sync function - only called on initial load, manual trigger, or when changes detected
   const sync = useCallback(async (): Promise<SyncResult | null> => {
     const userId = user?.id
     if (!userId || isOffline || syncInProgressRef.current) {
       return null
     }
 
-    // Check if we synced recently
-    const now = Date.now()
-    if (now - lastSyncTimeRef.current < MIN_SYNC_INTERVAL_MS) {
-      console.log('[OfflineContext] Skipping sync - synced recently')
-      return null
-    }
-
     syncInProgressRef.current = true
-    lastSyncTimeRef.current = now
 
     try {
+      console.log('[OfflineContext] Starting full sync')
       const result = await syncService.fullSync(userId)
 
       // Reload cached data after sync
@@ -170,6 +165,33 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
       syncInProgressRef.current = false
     }
   }, [user?.id, isOffline, loadCachedData])
+
+  // Lightweight check for remote changes - runs every minute
+  const checkForChanges = useCallback(async (): Promise<ChangeCheckResult | null> => {
+    const userId = user?.id
+    if (!userId || isOffline || checkInProgressRef.current || syncInProgressRef.current) {
+      return null
+    }
+
+    checkInProgressRef.current = true
+
+    try {
+      console.log('[OfflineContext] Checking for remote changes...')
+      const result = await syncService.checkForChanges(userId)
+
+      if (result.hasChanges) {
+        console.log('[OfflineContext] Changes detected in:', result.changedStores)
+        // Trigger full sync when changes are detected
+        await sync()
+      } else {
+        console.log('[OfflineContext] No remote changes detected')
+      }
+
+      return result
+    } finally {
+      checkInProgressRef.current = false
+    }
+  }, [user?.id, isOffline, sync])
 
   // Sync when coming back online (only once per reconnection)
   useEffect(() => {
@@ -194,14 +216,39 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     }
   }, [user?.id, isOffline, sync])
 
+  // Set up 1-minute interval to check for remote changes
+  useEffect(() => {
+    // Clear any existing interval
+    if (changeCheckIntervalRef.current) {
+      clearInterval(changeCheckIntervalRef.current)
+      changeCheckIntervalRef.current = null
+    }
+
+    // Only set up interval if user is logged in and online
+    if (user?.id && !isOffline) {
+      console.log('[OfflineContext] Setting up 1-minute change check interval')
+      changeCheckIntervalRef.current = setInterval(() => {
+        checkForChanges()
+      }, CHANGE_CHECK_INTERVAL_MS)
+    }
+
+    return () => {
+      if (changeCheckIntervalRef.current) {
+        clearInterval(changeCheckIntervalRef.current)
+        changeCheckIntervalRef.current = null
+      }
+    }
+  }, [user?.id, isOffline, checkForChanges])
+
   // Listen for service worker sync messages
   useEffect(() => {
     if (typeof navigator === 'undefined' || !navigator.serviceWorker) return
 
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'SYNC_REQUIRED' || event.data?.type === 'PERIODIC_SYNC') {
-        if (!isOffline && user?.id && !syncInProgressRef.current) {
-          sync()
+        if (!isOffline && user?.id && !syncInProgressRef.current && !checkInProgressRef.current) {
+          // Use checkForChanges instead of full sync
+          checkForChanges()
         }
       }
     }
@@ -210,7 +257,7 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleMessage)
     }
-  }, [isOffline, user?.id, sync])
+  }, [isOffline, user?.id, checkForChanges])
 
   // Cache management functions
   const cacheProfile = useCallback(async (data: OfflineProfile) => {
@@ -254,6 +301,7 @@ export function OfflineProvider({ children }: OfflineProviderProps) {
     lastSyncTime,
     pendingCount,
     sync,
+    checkForChanges,
     clearOfflineData,
     cachedProfile,
     cachedCommunities,

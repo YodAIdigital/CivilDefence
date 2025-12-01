@@ -32,6 +32,13 @@ import type {
 const MAX_RETRY_ATTEMPTS = 3
 const RETRY_DELAY_MS = 1000
 
+// Change detection result
+export interface ChangeCheckResult {
+  hasChanges: boolean
+  changedStores: StoreName[]
+  latestUpdateTime: number | null
+}
+
 // Sync status types
 export type SyncStatus = 'idle' | 'syncing' | 'error' | 'success'
 
@@ -539,6 +546,115 @@ class SyncService {
   async getPendingSyncCount(): Promise<number> {
     const queue = await getSyncQueue()
     return queue.length
+  }
+
+  // Lightweight check for remote changes without downloading data
+  // This compares server timestamps against local cache timestamps
+  async checkForChanges(userId: string): Promise<ChangeCheckResult> {
+    const changedStores: StoreName[] = []
+    let latestUpdateTime: number | null = null
+
+    try {
+      // Get user's community IDs first
+      const { data: memberships } = await supabase
+        .from('community_members')
+        .select('community_id')
+        .eq('user_id', userId)
+
+      const communityIds = memberships?.map((m) => m.community_id) || []
+
+      // Check profile updated_at
+      const profileMeta = await getStoreMeta(STORES.PROFILE)
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('updated_at')
+        .eq('id', userId)
+        .single()
+
+      if (profileData?.updated_at) {
+        const serverTime = new Date(profileData.updated_at).getTime()
+        if (!profileMeta || serverTime > profileMeta.lastSyncedAt) {
+          changedStores.push(STORES.PROFILE)
+        }
+        if (!latestUpdateTime || serverTime > latestUpdateTime) {
+          latestUpdateTime = serverTime
+        }
+      }
+
+      // Check communities - get max updated_at
+      if (communityIds.length > 0) {
+        const communitiesMeta = await getStoreMeta(STORES.COMMUNITIES)
+        const { data: commData } = await supabase
+          .from('communities')
+          .select('updated_at')
+          .in('id', communityIds)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+
+        if (commData?.[0]?.updated_at) {
+          const serverTime = new Date(commData[0].updated_at).getTime()
+          if (!communitiesMeta || serverTime > communitiesMeta.lastSyncedAt) {
+            changedStores.push(STORES.COMMUNITIES)
+          }
+          if (!latestUpdateTime || serverTime > latestUpdateTime) {
+            latestUpdateTime = serverTime
+          }
+        }
+
+        // Check alerts - get latest created_at
+        const alertsMeta = await getStoreMeta(STORES.ALERTS)
+        const { data: alertData } = await supabase
+          .from('alerts')
+          .select('created_at')
+          .eq('is_active', true)
+          .or(`community_id.in.(${communityIds.join(',')}),is_public.eq.true`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (alertData?.[0]?.created_at) {
+          const serverTime = new Date(alertData[0].created_at).getTime()
+          if (!alertsMeta || serverTime > alertsMeta.lastSyncedAt) {
+            changedStores.push(STORES.ALERTS)
+          }
+          if (!latestUpdateTime || serverTime > latestUpdateTime) {
+            latestUpdateTime = serverTime
+          }
+        }
+
+        // Check events - get latest updated_at
+        const eventsMeta = await getStoreMeta(STORES.EVENTS)
+        const { data: eventData } = await supabase
+          .from('community_events')
+          .select('updated_at')
+          .in('community_id', communityIds)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+
+        if (eventData?.[0]?.updated_at) {
+          const serverTime = new Date(eventData[0].updated_at).getTime()
+          if (!eventsMeta || serverTime > eventsMeta.lastSyncedAt) {
+            changedStores.push(STORES.EVENTS)
+          }
+          if (!latestUpdateTime || serverTime > latestUpdateTime) {
+            latestUpdateTime = serverTime
+          }
+        }
+      }
+
+      return {
+        hasChanges: changedStores.length > 0,
+        changedStores,
+        latestUpdateTime,
+      }
+    } catch (error) {
+      console.error('Failed to check for changes:', error)
+      // On error, assume no changes to avoid unnecessary syncs
+      return {
+        hasChanges: false,
+        changedStores: [],
+        latestUpdateTime: null,
+      }
+    }
   }
 }
 

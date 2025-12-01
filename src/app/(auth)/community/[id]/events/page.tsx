@@ -7,6 +7,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
+import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete'
 import type { Community, CommunityEvent, CommunityMember, EventType, EventVisibility, Profile } from '@/types/database'
 import { EVENT_TYPE_CONFIG as eventTypeConfig, EVENT_VISIBILITY_CONFIG as visibilityConfig } from '@/types/database'
 
@@ -29,12 +30,13 @@ interface EventFormData {
   start_time: string
   duration_hours: number
   duration_minutes: number
-  all_day: boolean
   event_type: EventType
   visibility: EventVisibility
   location_name: string
   location_address: string
   use_meeting_point: boolean
+  is_online: boolean
+  meeting_link: string
   notes: string
   invites: EventInviteData[]
 }
@@ -45,12 +47,13 @@ const initialFormData: EventFormData = {
   start_time: '',
   duration_hours: 1,
   duration_minutes: 0,
-  all_day: false,
   event_type: 'general',
   visibility: 'all_members',
   location_name: '',
   location_address: '',
   use_meeting_point: false,
+  is_online: false,
+  meeting_link: '',
   notes: '',
   invites: [],
 }
@@ -160,12 +163,13 @@ export default function CommunityEventsPage() {
       start_time: formatDateTimeForInput(event.start_time),
       duration_hours: hours,
       duration_minutes: minutes,
-      all_day: event.all_day,
       event_type: event.event_type,
       visibility: event.visibility,
       location_name: event.location_name || '',
       location_address: event.location_address || '',
       use_meeting_point: event.use_meeting_point,
+      is_online: event.is_online || false,
+      meeting_link: event.meeting_link || '',
       notes: event.notes || '',
       invites: [],
     })
@@ -232,13 +236,15 @@ export default function CommunityEventsPage() {
         title: formData.title,
         description: formData.description || null,
         start_time: new Date(formData.start_time).toISOString(),
-        duration_minutes: formData.all_day ? 1440 : durationMinutes, // 1440 = 24 hours for all day
-        all_day: formData.all_day,
+        duration_minutes: durationMinutes,
+        all_day: false,
         event_type: formData.event_type,
         visibility: formData.visibility,
-        location_name: formData.location_name || null,
-        location_address: formData.location_address || null,
-        use_meeting_point: formData.use_meeting_point,
+        location_name: formData.is_online ? null : (formData.location_name || null),
+        location_address: formData.is_online ? null : (formData.location_address || null),
+        use_meeting_point: formData.is_online ? false : formData.use_meeting_point,
+        is_online: formData.is_online,
+        meeting_link: formData.is_online ? (formData.meeting_link || null) : null,
         notes: formData.notes || null,
         created_by: user.id,
       }
@@ -295,6 +301,51 @@ export default function CommunityEventsPage() {
         if (inviteError) {
           console.error('Error creating invites:', inviteError)
           // Don't fail the whole operation for invite errors
+        }
+      }
+
+      // Send push notifications for new events (not when editing)
+      if (!editingEvent) {
+        try {
+          let recipientUserIds: string[] = []
+
+          // Determine recipients based on visibility
+          if (formData.visibility === 'invite_only') {
+            // Only notify invited members (not external invites)
+            recipientUserIds = formData.invites
+              .filter(invite => invite.user_id)
+              .map(invite => invite.user_id as string)
+          } else if (formData.visibility === 'admin_only') {
+            // Notify all admins
+            recipientUserIds = members
+              .filter(m => m.role === 'admin' || m.role === 'super_admin')
+              .map(m => m.user_id)
+          } else {
+            // Notify all members for 'all_members' visibility
+            recipientUserIds = members.map(m => m.user_id)
+          }
+
+          // Remove the creator from notifications (they created the event)
+          recipientUserIds = recipientUserIds.filter(id => id !== user.id)
+
+          if (recipientUserIds.length > 0) {
+            await fetch('/api/event-notification', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                eventId,
+                communityId,
+                eventTitle: formData.title,
+                eventStartTime: new Date(formData.start_time).toISOString(),
+                isOnline: formData.is_online,
+                meetingLink: formData.meeting_link || undefined,
+                recipientUserIds,
+              }),
+            })
+          }
+        } catch (notifyErr) {
+          console.error('Error sending event notifications:', notifyErr)
+          // Don't fail the whole operation for notification errors
         }
       }
 
@@ -594,7 +645,23 @@ export default function CommunityEventsPage() {
                           {event.description}
                         </p>
                       )}
-                      {(event.location_name || event.use_meeting_point) && (
+                      {event.is_online ? (
+                        <div className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
+                          <span className="material-icons text-sm">videocam</span>
+                          <span>Online Event</span>
+                          {event.meeting_link && (
+                            <a
+                              href={event.meeting_link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="ml-2 text-primary hover:underline"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Join Meeting
+                            </a>
+                          )}
+                        </div>
+                      ) : (event.location_name || event.use_meeting_point) && (
                         <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground">
                           <span className="material-icons text-sm">location_on</span>
                           {event.use_meeting_point ? 'Community Meeting Point' : event.location_name}
@@ -722,107 +789,138 @@ export default function CommunityEventsPage() {
                 />
               </div>
 
-              {/* All Day Toggle */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="all_day"
-                  checked={formData.all_day}
-                  onChange={(e) => setFormData({ ...formData, all_day: e.target.checked })}
-                  className="rounded"
-                />
-                <label htmlFor="all_day" className="text-sm">All day event</label>
-              </div>
-
-              {/* Start Date/Time */}
-              <div>
-                <label className="block text-sm font-medium mb-1">Start *</label>
-                <input
-                  type={formData.all_day ? 'date' : 'datetime-local'}
-                  required
-                  value={formData.all_day ? formData.start_time.split('T')[0] : formData.start_time}
-                  onChange={(e) => setFormData({ ...formData, start_time: formData.all_day ? `${e.target.value}T00:00` : e.target.value })}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                />
-              </div>
-
-              {/* Duration */}
-              {!formData.all_day && (
+              {/* Start Date/Time and Duration - Inline */}
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium mb-1">Start *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={formData.start_time}
+                    onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Duration</label>
-                  <div className="flex gap-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min="0"
-                          max="24"
-                          value={formData.duration_hours}
-                          onChange={(e) => setFormData({ ...formData, duration_hours: parseInt(e.target.value) || 0 })}
-                          className="w-20 rounded-lg border border-border bg-background px-3 py-2"
-                        />
-                        <span className="text-sm text-muted-foreground">hours</span>
-                      </div>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={formData.duration_minutes}
-                          onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}
-                          className="w-20 rounded-lg border border-border bg-background px-3 py-2"
-                        >
-                          <option value="0">0</option>
-                          <option value="15">15</option>
-                          <option value="30">30</option>
-                          <option value="45">45</option>
-                        </select>
-                        <span className="text-sm text-muted-foreground">minutes</span>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="24"
+                      value={formData.duration_hours}
+                      onChange={(e) => setFormData({ ...formData, duration_hours: parseInt(e.target.value) || 0 })}
+                      className="w-16 rounded-lg border border-border bg-background px-3 py-2"
+                    />
+                    <span className="text-sm text-muted-foreground">h</span>
+                    <select
+                      value={formData.duration_minutes}
+                      onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}
+                      className="w-16 rounded-lg border border-border bg-background px-3 py-2"
+                    >
+                      <option value="0">0</option>
+                      <option value="15">15</option>
+                      <option value="30">30</option>
+                      <option value="45">45</option>
+                    </select>
+                    <span className="text-sm text-muted-foreground">m</span>
                   </div>
                 </div>
-              )}
+              </div>
 
-              {/* Location */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    id="use_meeting_point"
-                    checked={formData.use_meeting_point}
-                    onChange={(e) => setFormData({ ...formData, use_meeting_point: e.target.checked })}
-                    className="rounded"
-                  />
-                  <label htmlFor="use_meeting_point" className="text-sm">
-                    Use community meeting point
-                    {community?.meeting_point_name && (
-                      <span className="text-muted-foreground"> ({community.meeting_point_name})</span>
-                    )}
+              {/* Event Location Type */}
+              <div className="space-y-3">
+                <label className="block text-sm font-medium">Event Location</label>
+                <div className="flex gap-4">
+                  <label className={`flex-1 flex items-center gap-2 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    !formData.is_online ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="location_type"
+                      checked={!formData.is_online}
+                      onChange={() => setFormData({ ...formData, is_online: false, meeting_link: '' })}
+                      className="sr-only"
+                    />
+                    <span className="material-icons text-lg text-muted-foreground">location_on</span>
+                    <span className="text-sm font-medium">In-Person</span>
+                  </label>
+                  <label className={`flex-1 flex items-center gap-2 rounded-lg border p-3 cursor-pointer transition-colors ${
+                    formData.is_online ? 'border-primary bg-primary/5' : 'border-border hover:bg-muted/50'
+                  }`}>
+                    <input
+                      type="radio"
+                      name="location_type"
+                      checked={formData.is_online}
+                      onChange={() => setFormData({ ...formData, is_online: true, use_meeting_point: false })}
+                      className="sr-only"
+                    />
+                    <span className="material-icons text-lg text-muted-foreground">videocam</span>
+                    <span className="text-sm font-medium">Online</span>
                   </label>
                 </div>
 
-                {!formData.use_meeting_point && (
+                {/* Online Meeting Options */}
+                {formData.is_online && (
+                  <div className="space-y-2 pt-2">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Meeting Link</label>
+                      <input
+                        type="url"
+                        value={formData.meeting_link}
+                        onChange={(e) => setFormData({ ...formData, meeting_link: e.target.value })}
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                        placeholder="https://meet.google.com/... or Zoom/Teams link"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Paste your Google Meet, Zoom, or Teams meeting link
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* In-Person Location Options */}
+                {!formData.is_online && (
                   <>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Location Name</label>
+                    <div className="flex items-center gap-2">
                       <input
-                        type="text"
-                        value={formData.location_name}
-                        onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                        placeholder="e.g., Community Hall"
+                        type="checkbox"
+                        id="use_meeting_point"
+                        checked={formData.use_meeting_point}
+                        onChange={(e) => setFormData({ ...formData, use_meeting_point: e.target.checked })}
+                        className="rounded"
                       />
+                      <label htmlFor="use_meeting_point" className="text-sm">
+                        Use community meeting point
+                        {community?.meeting_point_name && (
+                          <span className="text-muted-foreground"> ({community.meeting_point_name})</span>
+                        )}
+                      </label>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Address</label>
-                      <input
-                        type="text"
-                        value={formData.location_address}
-                        onChange={(e) => setFormData({ ...formData, location_address: e.target.value })}
-                        className="w-full rounded-lg border border-border bg-background px-3 py-2"
-                        placeholder="Full address..."
-                      />
-                    </div>
+
+                    {!formData.use_meeting_point && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Location Name</label>
+                          <input
+                            type="text"
+                            value={formData.location_name}
+                            onChange={(e) => setFormData({ ...formData, location_name: e.target.value })}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                            placeholder="e.g., Community Hall"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Address</label>
+                          <AddressAutocomplete
+                            value={formData.location_address}
+                            onChange={(address) => setFormData({ ...formData, location_address: address })}
+                            className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                            placeholder="Start typing to search for an address..."
+                          />
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
               </div>

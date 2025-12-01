@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useOfflineSync } from '@/hooks/useOfflineData'
 import { useAuth } from '@/contexts/auth-context'
+import { useOfflineContext } from '@/contexts/OfflineContext'
 
 interface SyncStatusIndicatorProps {
   showDetails?: boolean
@@ -18,7 +18,7 @@ export function SyncStatusIndicator({ showDetails = false, className = '' }: Syn
     isOffline,
     isSyncing,
     sync,
-  } = useOfflineSync(user?.id || null)
+  } = useOfflineContext()
 
   const [showTooltip, setShowTooltip] = useState(false)
 
@@ -142,14 +142,13 @@ export function SyncStatusIndicator({ showDetails = false, className = '' }: Syn
 
 // Floating sync status for mobile
 export function FloatingSyncStatus() {
-  const { user } = useAuth()
   const {
     syncProgress,
     pendingCount,
     isOffline,
     isSyncing,
     sync,
-  } = useOfflineSync(user?.id || null)
+  } = useOfflineContext()
 
   const [dismissed, setDismissed] = useState(false)
 
@@ -228,8 +227,7 @@ export function FloatingSyncStatus() {
 
 // Compact offline banner
 export function OfflineBanner() {
-  const { user } = useAuth()
-  const { isOffline } = useOfflineSync(user?.id || null)
+  const { isOffline } = useOfflineContext()
 
   if (!isOffline) return null
 

@@ -4,11 +4,19 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
-import type { CommunityEvent, Community } from '@/types/database'
+import type { CommunityEvent, Community, RsvpStatus } from '@/types/database'
 import { EVENT_TYPE_CONFIG } from '@/types/database'
+
+interface EventRsvp {
+  id: string
+  event_id: string
+  user_id: string
+  status: RsvpStatus
+}
 
 interface EventWithCommunity extends CommunityEvent {
   community: Community
+  rsvp?: EventRsvp
 }
 
 interface EventCalendarProps {
@@ -50,7 +58,32 @@ export function EventCalendar({ showHeader = true, maxEvents = 5, compact = fals
 
       if (eventsError) throw eventsError
 
-      setEvents((eventsData || []) as EventWithCommunity[])
+      // Fetch user's RSVPs for these events
+      const eventIds = (eventsData || []).map(e => e.id)
+      let rsvpMap: Record<string, EventRsvp> = {}
+
+      if (eventIds.length > 0) {
+        const { data: rsvpData } = await supabase
+          .from('event_rsvps')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('event_id', eventIds)
+
+        if (rsvpData) {
+          rsvpMap = rsvpData.reduce((acc, rsvp) => {
+            acc[rsvp.event_id] = rsvp as EventRsvp
+            return acc
+          }, {} as Record<string, EventRsvp>)
+        }
+      }
+
+      // Merge RSVP data with events
+      const eventsWithRsvp = (eventsData || []).map(event => ({
+        ...event,
+        rsvp: rsvpMap[event.id],
+      })) as EventWithCommunity[]
+
+      setEvents(eventsWithRsvp)
     } catch (err) {
       console.error('Error fetching events:', err)
     } finally {
@@ -61,6 +94,43 @@ export function EventCalendar({ showHeader = true, maxEvents = 5, compact = fals
   useEffect(() => {
     fetchEvents()
   }, [fetchEvents])
+
+  // Handle RSVP update
+  const handleRsvp = useCallback(async (eventId: string, status: RsvpStatus) => {
+    if (!user) return
+
+    try {
+      // Check if user already has an RSVP
+      const existingEvent = events.find(e => e.id === eventId)
+      const existingRsvp = existingEvent?.rsvp
+
+      if (existingRsvp) {
+        // Update existing RSVP
+        const { error } = await supabase
+          .from('event_rsvps')
+          .update({ status, responded_at: new Date().toISOString() })
+          .eq('id', existingRsvp.id)
+
+        if (error) throw error
+      } else {
+        // Insert new RSVP
+        const { error } = await supabase
+          .from('event_rsvps')
+          .insert({
+            event_id: eventId,
+            user_id: user.id,
+            status,
+          })
+
+        if (error) throw error
+      }
+
+      // Refresh events to get updated RSVP
+      fetchEvents()
+    } catch (err) {
+      console.error('Error updating RSVP:', err)
+    }
+  }, [user, events, fetchEvents])
 
   const formatEventTime = (startTime: string, durationMinutes: number, allDay: boolean) => {
     const start = new Date(startTime)
@@ -257,9 +327,59 @@ export function EventCalendar({ showHeader = true, maxEvents = 5, compact = fals
                           <p className="text-sm text-muted-foreground">
                             {formatEventTime(event.start_time, event.duration_minutes, event.all_day)}
                           </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {event.community?.name}
-                          </p>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                            <span>{event.community?.name}</span>
+                            {event.is_online && (
+                              <>
+                                <span className="material-icons text-xs">videocam</span>
+                                {event.meeting_link && (
+                                  <a
+                                    href={event.meeting_link}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    Join
+                                  </a>
+                                )}
+                              </>
+                            )}
+                          </div>
+                          {/* RSVP Buttons */}
+                          <div className="flex items-center gap-1 mt-2">
+                            <span className="text-xs text-muted-foreground mr-1">RSVP:</span>
+                            <button
+                              onClick={() => handleRsvp(event.id, 'going')}
+                              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                                event.rsvp?.status === 'going'
+                                  ? 'bg-green-500 text-white'
+                                  : 'bg-muted text-muted-foreground hover:bg-green-100 hover:text-green-700'
+                              }`}
+                            >
+                              Yes
+                            </button>
+                            <button
+                              onClick={() => handleRsvp(event.id, 'maybe')}
+                              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                                event.rsvp?.status === 'maybe'
+                                  ? 'bg-yellow-500 text-white'
+                                  : 'bg-muted text-muted-foreground hover:bg-yellow-100 hover:text-yellow-700'
+                              }`}
+                            >
+                              Maybe
+                            </button>
+                            <button
+                              onClick={() => handleRsvp(event.id, 'not_going')}
+                              className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
+                                event.rsvp?.status === 'not_going'
+                                  ? 'bg-red-500 text-white'
+                                  : 'bg-muted text-muted-foreground hover:bg-red-100 hover:text-red-700'
+                              }`}
+                            >
+                              No
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )
