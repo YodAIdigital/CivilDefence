@@ -115,21 +115,13 @@ export default function DashboardPage() {
     }
 
     try {
-      // Get user's community memberships
-      const { data: memberships } = await supabase
-        .from('community_members')
-        .select('community_id')
-        .eq('user_id', user.id)
-
-      const communityIds = memberships?.map(m => m.community_id) || []
-
-      // Fetch alerts for user's communities
-      let dbAlerts: DBAlert[] = []
-
-      if (communityIds.length > 0) {
-        const { data: alertsData } = await supabase
-          .from('alerts')
-          .select(`
+      // Fetch alerts where user is a specific recipient
+      // This respects the recipient_group filtering (admin, team, members, specific)
+      const { data: recipientAlerts } = await supabase
+        .from('alert_recipients')
+        .select(`
+          alert_id,
+          alerts (
             id,
             title,
             content,
@@ -140,13 +132,19 @@ export default function DashboardPage() {
             communities (
               name
             )
-          `)
-          .eq('is_active', true)
-          .in('community_id', communityIds)
-          .order('created_at', { ascending: false })
-          .limit(20)
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
 
-        dbAlerts = (alertsData || []) as unknown as DBAlert[]
+      // Extract alerts from recipients and filter active ones
+      let dbAlerts: DBAlert[] = []
+
+      if (recipientAlerts && recipientAlerts.length > 0) {
+        dbAlerts = recipientAlerts
+          .map(r => r.alerts as unknown as DBAlert)
+          .filter(alert => alert && alert.is_active)
       }
 
       // Filter out dismissed alerts
@@ -203,7 +201,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return
 
-    // Set up real-time subscription for new alerts
+    // Set up real-time subscription for new alert recipients (targeted to this user)
     const channel = supabase
       .channel('alerts-realtime')
       .on(
@@ -211,10 +209,11 @@ export default function DashboardPage() {
         {
           event: 'INSERT',
           schema: 'public',
-          table: 'alerts',
+          table: 'alert_recipients',
+          filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // Refetch alerts when a new one is inserted
+          // Refetch alerts when a new recipient entry is added for this user
           fetchAlerts()
         }
       )

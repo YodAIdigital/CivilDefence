@@ -13,30 +13,28 @@ export interface AuthResult<T = void> {
 
 /**
  * Get the appropriate redirect URL for auth operations
- * Uses NEXT_PUBLIC_APP_URL in production, or sanitizes the current origin in development
- * Filters out invalid origins like 0.0.0.0
+ * Always uses the production URL (civildefence.pro) to ensure consistent auth redirects
+ * This is required because:
+ * 1. PWAs may report their origin as the dev server address (0.0.0.0)
+ * 2. Supabase must have a consistent redirect URL configured
  */
 function getAuthRedirectUrl(path: string): string {
-  if (typeof window === 'undefined') {
-    // Server-side: use configured APP_URL or fallback
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
-    return appUrl ? `${appUrl}${path}` : `http://localhost:3000${path}`
-  }
+  // Always use production URL for auth redirects
+  // This must match what's configured in Supabase Auth settings
+  const productionUrl = 'https://civildefence.pro'
 
-  const origin = window.location.origin
+  // Check if we're in development mode
+  const isDev = typeof window !== 'undefined'
+    ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    : process.env.NODE_ENV === 'development'
 
-  // If origin contains 0.0.0.0, this is invalid for OAuth redirects
-  if (origin.includes('0.0.0.0')) {
-    // Try to use the configured APP_URL
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL
-    if (appUrl && !appUrl.includes('0.0.0.0')) {
-      return `${appUrl}${path}`
-    }
-    // Fallback to localhost for local development
+  if (isDev) {
+    // In development, use localhost
     return `http://localhost:3000${path}`
   }
 
-  return `${origin}${path}`
+  // In production, always use the production URL
+  return `${productionUrl}${path}`
 }
 
 /**

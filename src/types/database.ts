@@ -700,6 +700,125 @@ export interface Database {
           }
         ]
       }
+      alert_recipients: {
+        Row: {
+          id: string
+          alert_id: string
+          user_id: string
+          read_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          alert_id: string
+          user_id: string
+          read_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          alert_id?: string
+          user_id?: string
+          read_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'alert_recipients_alert_id_fkey'
+            columns: ['alert_id']
+            referencedRelation: 'alerts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'alert_recipients_user_id_fkey'
+            columns: ['user_id']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      community_map_points: {
+        Row: {
+          id: string
+          community_id: string
+          name: string
+          description: string | null
+          point_type: string
+          icon: string
+          color: string
+          address: string | null
+          lat: number
+          lng: number
+          contact_name: string | null
+          contact_phone: string | null
+          contact_email: string | null
+          is_active: boolean
+          display_order: number
+          visibility: string
+          created_by: string
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          name: string
+          description?: string | null
+          point_type?: string
+          icon?: string
+          color?: string
+          address?: string | null
+          lat: number
+          lng: number
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_email?: string | null
+          is_active?: boolean
+          display_order?: number
+          visibility?: string
+          created_by: string
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          name?: string
+          description?: string | null
+          point_type?: string
+          icon?: string
+          color?: string
+          address?: string | null
+          lat?: number
+          lng?: number
+          contact_name?: string | null
+          contact_phone?: string | null
+          contact_email?: string | null
+          is_active?: boolean
+          display_order?: number
+          visibility?: string
+          created_by?: string
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'community_map_points_community_id_fkey'
+            columns: ['community_id']
+            referencedRelation: 'communities'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'community_map_points_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -110,24 +110,33 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         }`}
       >
         {/* Logo & Collapse Button */}
-        <div className="flex h-16 items-center justify-between px-3">
+        <div className="flex h-16 items-center px-3 relative">
           {isCollapsed ? (
             <Logo size="sm" showText={false} className="mx-auto" />
           ) : (
-            <Logo size="sm" />
+            <>
+              <Logo size="sm" />
+              <button
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="ml-auto rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title="Collapse sidebar"
+              >
+                <span className="material-icons text-lg">chevron_left</span>
+              </button>
+            </>
           )}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className={`rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground ${
-              isCollapsed ? 'absolute -right-3 top-5 z-50 bg-card border border-border shadow-sm' : ''
-            }`}
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <span className="material-icons text-lg">
-              {isCollapsed ? 'chevron_right' : 'chevron_left'}
-            </span>
-          </button>
         </div>
+
+        {/* Expand button - positioned outside sidebar when collapsed */}
+        {isCollapsed && (
+          <button
+            onClick={() => setIsCollapsed(false)}
+            className="absolute -right-3 top-8 z-50 rounded-lg p-1.5 bg-card border border-border shadow-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            title="Expand sidebar"
+          >
+            <span className="material-icons text-lg">chevron_right</span>
+          </button>
+        )}
 
         {/* Community Selector */}
         {communities.length > 0 && (
