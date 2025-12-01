@@ -24,6 +24,7 @@ export default function LoginPage() {
 
   // Check for error in URL params (from auth callback)
   useEffect(() => {
+    if (!searchParams) return
     const urlError = searchParams.get('error')
     const errorDescription = searchParams.get('error_description')
     if (urlError) {
