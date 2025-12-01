@@ -124,6 +124,7 @@ export default function DashboardPage() {
         .from('alert_recipients')
         .select(`
           alert_id,
+          created_at,
           alerts (
             id,
             title,
@@ -141,10 +142,28 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(20)
 
+      // Also log raw errors for debugging
+      if (recipientError) {
+        console.error('Alert recipients query error:', recipientError)
+      }
+
       console.log('Recipient alerts query result:', {
         count: recipientAlerts?.length || 0,
         data: recipientAlerts,
         error: recipientError?.message
+      })
+
+      // Debug: Also try querying alerts directly to check RLS
+      const { data: directAlerts, error: directError } = await supabase
+        .from('alerts')
+        .select('id, title, is_active, created_at')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(5)
+      console.log('Direct alerts query (RLS check):', {
+        count: directAlerts?.length || 0,
+        data: directAlerts,
+        error: directError?.message
       })
 
       // Extract alerts from recipients and filter active ones
