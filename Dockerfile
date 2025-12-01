@@ -41,6 +41,9 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
+# Listen on all interfaces but don't use 0.0.0.0 as the hostname for URLs
 ENV HOSTNAME="0.0.0.0"
+# Ensure the app uses the correct public URL for redirects
+ENV NEXT_PUBLIC_APP_URL="https://civildefence.pro"
 
 CMD ["node", "server.js"]

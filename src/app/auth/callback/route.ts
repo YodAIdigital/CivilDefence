@@ -3,6 +3,19 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { cookies } from 'next/headers'
 
+/**
+ * Get the correct base URL for redirects
+ * Never uses request.url origin as it can be 0.0.0.0 in Docker
+ */
+function getBaseUrl(): string {
+  // Always use production URL unless explicitly in development
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000'
+  }
+  // Use configured APP_URL or fallback to production domain
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://civildefence.pro'
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
@@ -12,8 +25,11 @@ export async function GET(request: NextRequest) {
 
   const cookieStore = await cookies()
 
+  // Use correct base URL - never use requestUrl.origin as it can be 0.0.0.0 in Docker
+  const baseUrl = getBaseUrl()
+
   // Create response that we'll add cookies to
-  const response = NextResponse.redirect(new URL(next, requestUrl.origin))
+  const response = NextResponse.redirect(new URL(next, baseUrl))
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,7 +57,7 @@ export async function GET(request: NextRequest) {
     }
 
     console.error('Auth callback error (code exchange):', error)
-    return NextResponse.redirect(new URL('/login?error=auth_callback_error', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=auth_callback_error', baseUrl))
   }
 
   // Handle email confirmation with token_hash
@@ -56,9 +72,9 @@ export async function GET(request: NextRequest) {
     }
 
     console.error('Auth callback error (token verification):', error)
-    return NextResponse.redirect(new URL('/login?error=verification_error', requestUrl.origin))
+    return NextResponse.redirect(new URL('/login?error=verification_error', baseUrl))
   }
 
   // If no code or token_hash, redirect to dashboard (session may already exist)
-  return NextResponse.redirect(new URL('/dashboard', requestUrl.origin))
+  return NextResponse.redirect(new URL('/dashboard', baseUrl))
 }

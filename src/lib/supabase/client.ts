@@ -13,6 +13,22 @@ if (typeof window !== 'undefined' && (!supabaseUrl || !supabaseAnonKey)) {
 }
 
 /**
+ * Get the correct site URL for auth redirects
+ * Never uses window.location to avoid Docker/PWA issues
+ */
+function getSiteUrl(): string {
+  // Check if we're in a browser and on localhost
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3000'
+    }
+  }
+  // Always use production URL in production
+  return 'https://civildefence.pro'
+}
+
+/**
  * Supabase client for client-side operations
  * Uses the anonymous key for public operations
  * Typed with Database schema for type safety
@@ -26,10 +42,20 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
       persistSession: typeof window !== 'undefined',
       detectSessionInUrl: typeof window !== 'undefined',
       storageKey: 'civil-defence-auth',
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      // Explicitly set the flow type and site URL to prevent 0.0.0.0 issues
+      flowType: 'pkce'
+    },
+    global: {
+      headers: {
+        'x-client-info': 'civildefencepro'
+      }
     }
   }
 )
+
+// Export getSiteUrl for use in auth functions
+export { getSiteUrl }
 
 /**
  * Get the current session

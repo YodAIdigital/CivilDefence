@@ -13,28 +13,30 @@ export interface AuthResult<T = void> {
 
 /**
  * Get the appropriate redirect URL for auth operations
- * Always uses the production URL (civildefence.pro) to ensure consistent auth redirects
- * This is required because:
- * 1. PWAs may report their origin as the dev server address (0.0.0.0)
- * 2. Supabase must have a consistent redirect URL configured
+ * ALWAYS uses hardcoded URLs to prevent any issues with window.location
+ * which can report incorrect origins in Docker/PWA environments
  */
 function getAuthRedirectUrl(path: string): string {
-  // Always use production URL for auth redirects
-  // This must match what's configured in Supabase Auth settings
-  const productionUrl = 'https://civildefence.pro'
+  // Production URL - must match Supabase Auth settings
+  const PRODUCTION_URL = 'https://civildefence.pro'
+  const LOCALHOST_URL = 'http://localhost:3000'
 
-  // Check if we're in development mode
-  const isDev = typeof window !== 'undefined'
-    ? window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    : process.env.NODE_ENV === 'development'
-
-  if (isDev) {
-    // In development, use localhost
-    return `http://localhost:3000${path}`
+  // Simple check: if we're on localhost, use localhost URL
+  // Otherwise ALWAYS use production URL (never trust window.location.origin)
+  if (typeof window !== 'undefined') {
+    const hostname = window.location.hostname
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return `${LOCALHOST_URL}${path}`
+    }
+  } else {
+    // Server-side: check NODE_ENV
+    if (process.env.NODE_ENV === 'development') {
+      return `${LOCALHOST_URL}${path}`
+    }
   }
 
-  // In production, always use the production URL
-  return `${productionUrl}${path}`
+  // Default to production - NEVER use window.location.origin
+  return `${PRODUCTION_URL}${path}`
 }
 
 /**
