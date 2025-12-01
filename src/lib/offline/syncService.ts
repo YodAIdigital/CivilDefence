@@ -286,15 +286,16 @@ class SyncService {
     const communityIds = memberships.map((m) => m.community_id)
 
     // Fetch guides for all user's communities
-    const { data: guides, error } = await supabase
-      .from('community_guides')
+    // Note: community_guides table exists but not in generated types yet
+    const { data: guides, error } = await (supabase
+      .from('community_guides' as 'profiles')
       .select('*')
       .in('community_id', communityIds)
-      .eq('is_active', true)
+      .eq('is_active', true) as unknown as Promise<{ data: CommunityGuide[] | null; error: Error | null }>)
 
     if (error) throw error
     if (guides) {
-      await saveGuides(guides as CommunityGuide[])
+      await saveGuides(guides)
     }
   }
 

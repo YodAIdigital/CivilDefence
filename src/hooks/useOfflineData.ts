@@ -26,7 +26,6 @@ import {
 import { syncService, type SyncProgress, type SyncResult } from '@/lib/offline/syncService'
 import type {
   Community,
-  CommunityMember,
   CommunityGuide,
   CommunityMapPoint,
   Alert,
@@ -38,7 +37,6 @@ import type {
 export function useOfflineProfile(userId: string | null) {
   const [profile, setProfile] = useState<OfflineProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [_error, setError] = useState<string | null>(null)
   const { isOffline } = useOffline()
 
   // Load profile from IndexedDB
@@ -87,7 +85,6 @@ export function useOfflineProfile(userId: string | null) {
   return {
     profile,
     loading,
-    error,
     saveToCache,
     loadFromCache,
     isOffline,
@@ -97,17 +94,13 @@ export function useOfflineProfile(userId: string | null) {
 // Hook for managing offline communities data
 export function useOfflineCommunities(userId: string | null) {
   const [communities, setCommunities] = useState<Community[]>([])
-  const [_memberships, setMemberships] = useState<CommunityMember[]>([])
   const [loading, setLoading] = useState(true)
   const { isOffline } = useOffline()
 
   const loadFromCache = useCallback(async () => {
     if (!userId) return
     try {
-      const [cachedCommunities, _cachedMemberships] = await Promise.all([
-        getCommunities(),
-        Promise.resolve([]), // Would need to filter by userId
-      ])
+      const cachedCommunities = await getCommunities()
       setCommunities(cachedCommunities)
     } catch (e) {
       console.error('Failed to load cached communities:', e)
@@ -132,7 +125,6 @@ export function useOfflineCommunities(userId: string | null) {
 
   return {
     communities,
-    memberships,
     loading,
     saveToCache,
     loadFromCache,

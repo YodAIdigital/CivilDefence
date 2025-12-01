@@ -16,6 +16,13 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user_id ON push_subscriptions(
 -- Enable RLS
 ALTER TABLE push_subscriptions ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (to make migration idempotent)
+DROP POLICY IF EXISTS "Users can view own subscriptions" ON push_subscriptions;
+DROP POLICY IF EXISTS "Users can insert own subscriptions" ON push_subscriptions;
+DROP POLICY IF EXISTS "Users can update own subscriptions" ON push_subscriptions;
+DROP POLICY IF EXISTS "Users can delete own subscriptions" ON push_subscriptions;
+DROP POLICY IF EXISTS "Service role has full access to push_subscriptions" ON push_subscriptions;
+
 -- Users can only manage their own subscriptions
 CREATE POLICY "Users can view own subscriptions"
   ON push_subscriptions FOR SELECT
