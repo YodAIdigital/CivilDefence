@@ -3,7 +3,9 @@
 import { AuthProvider } from '@/contexts/auth-context'
 import { CommunityProvider } from '@/contexts/community-context'
 import { NotificationProvider } from '@/contexts/notification-context'
+import { OfflineProvider } from '@/contexts/OfflineContext'
 import { NotificationPermissionBanner } from '@/components/notifications/notification-permission-banner'
+import { FloatingSyncStatus } from '@/components/offline/SyncStatusIndicator'
 import { type ReactNode, useEffect } from 'react'
 
 interface ProvidersProps {
@@ -27,8 +29,11 @@ export function Providers({ children }: ProvidersProps) {
     <AuthProvider>
       <CommunityProvider>
         <NotificationProvider>
-          {children}
-          <NotificationPermissionBanner />
+          <OfflineProvider>
+            {children}
+            <NotificationPermissionBanner />
+            <FloatingSyncStatus />
+          </OfflineProvider>
         </NotificationProvider>
       </CommunityProvider>
     </AuthProvider>

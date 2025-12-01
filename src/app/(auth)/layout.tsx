@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
 import { Logo } from '@/components/custom/logo'
 import { VersionDisplay } from '@/components/version-display'
+import { SyncStatusIndicator } from '@/components/offline/SyncStatusIndicator'
 import type { Route } from 'next'
 
 interface AuthLayoutProps {
@@ -114,15 +115,18 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         <Link href="/dashboard">
           <Logo size="sm" />
         </Link>
-        <button
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
-          aria-label="Toggle menu"
-        >
-          <span className="material-icons text-2xl">
-            {isMobileMenuOpen ? 'close' : 'menu'}
-          </span>
-        </button>
+        <div className="flex items-center gap-2">
+          <SyncStatusIndicator />
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+            aria-label="Toggle menu"
+          >
+            <span className="material-icons text-2xl">
+              {isMobileMenuOpen ? 'close' : 'menu'}
+            </span>
+          </button>
+        </div>
       </header>
 
       {/* Mobile Menu Overlay */}
@@ -490,8 +494,12 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           )}
         </nav>
 
-        {/* User Section */}
+        {/* Sync Status & User Section */}
         <div className="border-t border-border p-3">
+          {/* Sync Status */}
+          <div className={`mb-3 ${isCollapsed ? 'flex justify-center' : ''}`}>
+            <SyncStatusIndicator showDetails={!isCollapsed} />
+          </div>
           <Link
             href="/profile"
             className={`flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted transition-colors ${isCollapsed ? 'justify-center' : ''}`}

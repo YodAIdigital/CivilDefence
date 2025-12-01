@@ -2,12 +2,13 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { GoogleMap, MapMarker, MapRegion } from './google-map'
+import { MemberLocationsLayer, type CommunityMemberWithLocation } from './member-locations-layer'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
-import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Search, X } from 'lucide-react'
+import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Search, X, Users } from 'lucide-react'
 import type { CommunityMapPoint, MapPointType, RegionPolygon } from '@/types/database'
-import { MAP_POINT_TYPE_CONFIG } from '@/types/database'
+import { MAP_POINT_TYPE_CONFIG, COMMUNITY_ROLE_CONFIG, SKILL_OPTIONS, EQUIPMENT_OPTIONS } from '@/types/database'
 
 interface CommunityRegionData {
   id: string
@@ -36,6 +37,12 @@ export function CommunityLocationsWidget({
   const [hiddenTypes, setHiddenTypes] = useState<Set<MapPointType>>(new Set())
   const showRegions = true // Always show community regions
   const [searchQuery, setSearchQuery] = useState('')
+
+  // Member locations state
+  const [showMemberLocations, setShowMemberLocations] = useState(false)
+  const [memberMarkers, setMemberMarkers] = useState<MapMarker[]>([])
+  const [filteredMembers, setFilteredMembers] = useState<CommunityMemberWithLocation[]>([])
+  const [showMemberList, setShowMemberList] = useState(false)
 
   const fetchLocations = useCallback(async () => {
     if (!user) {
@@ -108,6 +115,12 @@ export function CommunityLocationsWidget({
     fetchLocations()
   }, [fetchLocations])
 
+  // Handler for member locations changes - must be before early returns
+  const handleMembersChange = useCallback((markers: MapMarker[], members: CommunityMemberWithLocation[]) => {
+    setMemberMarkers(markers)
+    setFilteredMembers(members)
+  }, [])
+
   if (isLoading) {
     return (
       <div className="rounded-xl bg-card border border-border p-6">
@@ -170,7 +183,7 @@ export function CommunityLocationsWidget({
   })
 
   // Create markers for the map using colors from config (only visible types)
-  const markers: MapMarker[] = visibleLocations.map(location => {
+  const locationMarkers: MapMarker[] = visibleLocations.map(location => {
     const config = MAP_POINT_TYPE_CONFIG[location.point_type]
     const marker: MapMarker = {
       id: location.id,
@@ -184,6 +197,9 @@ export function CommunityLocationsWidget({
     }
     return marker
   })
+
+  // Combine location markers with member markers
+  const allMarkers: MapMarker[] = [...locationMarkers, ...memberMarkers]
 
   // Create regions for the map
   const regions: MapRegion[] = communityRegions
@@ -270,15 +286,26 @@ export function CommunityLocationsWidget({
         </div>
       )}
 
+      {/* Member Locations Controls */}
+      {activeCommunity && (
+        <div className="p-4 border-b border-border bg-muted/30">
+          <MemberLocationsLayer
+            showMemberLocations={showMemberLocations}
+            onToggleShowMembers={() => setShowMemberLocations(!showMemberLocations)}
+            onMembersChange={handleMembersChange}
+          />
+        </div>
+      )}
+
       {/* Map */}
       <div className="relative">
         <GoogleMap
-          markers={markers}
+          markers={allMarkers}
           regions={regions}
           showRegions={showRegions}
           height="450px"
           {...(mapCenter && { center: mapCenter })}
-          zoom={markers.length === 1 ? 14 : 11}
+          zoom={allMarkers.length === 1 ? 14 : 11}
           fitToRegions={regions.length > 0}
         />
         {/* Dynamic Legend based on location types present - clickable to toggle */}
@@ -309,6 +336,17 @@ export function CommunityLocationsWidget({
                     </button>
                   )
                 })}
+                {/* Member locations legend */}
+                {showMemberLocations && memberMarkers.length > 0 && (
+                  <button
+                    onClick={() => setShowMemberLocations(false)}
+                    className="flex items-center gap-1 transition-opacity cursor-pointer hover:opacity-80"
+                    title="Hide Members"
+                  >
+                    <Users className="w-3 h-3 text-purple-500" />
+                    <span>Members ({memberMarkers.length})</span>
+                  </button>
+                )}
               </div>
             </div>
           )
@@ -437,6 +475,108 @@ export function CommunityLocationsWidget({
               </>
             )}
           </button>
+        </div>
+      )}
+
+      {/* Member List Section */}
+      {showMemberLocations && filteredMembers.length > 0 && (
+        <div className="border-t border-border">
+          <button
+            onClick={() => setShowMemberList(!showMemberList)}
+            className="w-full p-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-purple-500" />
+              <span className="font-medium text-sm">Community Members</span>
+              <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
+                {filteredMembers.length}
+              </span>
+            </div>
+            <span className="material-icons text-muted-foreground">
+              {showMemberList ? 'expand_less' : 'expand_more'}
+            </span>
+          </button>
+
+          {showMemberList && (
+            <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
+              {filteredMembers.map(member => {
+                const roleConfig = COMMUNITY_ROLE_CONFIG[member.role]
+                return (
+                  <div
+                    key={member.id}
+                    className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors"
+                  >
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0"
+                      style={{ backgroundColor: `${roleConfig?.color || '#6b7280'}20` }}
+                    >
+                      <span
+                        className="material-icons text-xl"
+                        style={{ color: roleConfig?.color || '#6b7280' }}
+                      >
+                        person
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate flex items-center gap-2">
+                        {member.profile?.full_name || member.profile?.email || 'Unknown'}
+                        {member.role !== 'member' && roleConfig && (
+                          <span
+                            className="text-xs px-1.5 py-0.5 rounded-full"
+                            style={{
+                              backgroundColor: `${roleConfig.color}20`,
+                              color: roleConfig.color
+                            }}
+                          >
+                            {roleConfig.label}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {member.address || 'Location available'}
+                      </p>
+                      {/* Skills/Equipment badges */}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {member.skills?.slice(0, 2).map(skill => {
+                          const label = SKILL_OPTIONS.find(s => s.value === skill)?.label || skill
+                          return (
+                            <span
+                              key={skill}
+                              className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                            >
+                              {label}
+                            </span>
+                          )
+                        })}
+                        {member.equipment?.slice(0, 2).map(equip => {
+                          const label = EQUIPMENT_OPTIONS.find(e => e.value === equip)?.label || equip
+                          return (
+                            <span
+                              key={equip}
+                              className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                            >
+                              {label}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                    {member.lat && member.lng && (
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${member.lat},${member.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex-shrink-0"
+                      >
+                        <Navigation className="h-3 w-3" />
+                        Directions
+                      </a>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>
