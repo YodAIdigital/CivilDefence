@@ -1,12 +1,12 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
+import { useOffline } from '@/hooks/useOffline'
+import { getGuides, saveGuides } from '@/lib/offline/indexedDB'
 import { guideTemplates, GuideTemplate } from '@/data/guide-templates'
 import { GuideEditor } from '@/components/guides/guide-editor'
 import type { CommunityGuide, GuideSection, GuideEmergencyContact } from '@/types/database'
@@ -16,6 +16,7 @@ type ViewMode = 'list' | 'view' | 'edit' | 'create'
 export default function GuidesPage() {
   const { user } = useAuth()
   const { activeCommunity, canManageActiveCommunity } = useCommunity()
+  const { isOffline } = useOffline()
 
   const [guides, setGuides] = useState<CommunityGuide[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -25,9 +26,10 @@ export default function GuidesPage() {
   const [activeTab, setActiveTab] = useState<'before' | 'during' | 'after' | 'supplies' | 'contacts'>('before')
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [showTemplates, setShowTemplates] = useState(false)
+  const [usingCachedData, setUsingCachedData] = useState(false)
 
   // Check if user can edit (admin or team_member)
-  const canEdit = canManageActiveCommunity
+  const canEdit = canManageActiveCommunity && !isOffline // Can't edit when offline
 
   const fetchGuides = useCallback(async () => {
     if (!user || !activeCommunity) {
@@ -38,6 +40,20 @@ export default function GuidesPage() {
 
     try {
       setIsLoading(true)
+      setUsingCachedData(false)
+
+      // If offline, load from IndexedDB cache
+      if (isOffline) {
+        const cachedGuides = await getGuides(activeCommunity.id)
+        if (cachedGuides.length > 0) {
+          setGuides(cachedGuides)
+          setUsingCachedData(true)
+        } else {
+          setError('No cached data available while offline')
+        }
+        setIsLoading(false)
+        return
+      }
 
       // Fetch guides - admins see all, members see only active
       const query = supabase
@@ -48,7 +64,7 @@ export default function GuidesPage() {
         .order('created_at', { ascending: false })
 
       // Only filter by is_active for non-admin users
-      if (!canEdit) {
+      if (!canManageActiveCommunity) {
         (query as unknown as { eq: (col: string, val: boolean) => unknown }).eq('is_active', true)
       }
 
@@ -56,7 +72,14 @@ export default function GuidesPage() {
 
       if (guidesError) {
         console.warn('Could not fetch guides:', guidesError)
-        setGuides([])
+        // Try to load from cache on error
+        const cachedGuides = await getGuides(activeCommunity.id)
+        if (cachedGuides.length > 0) {
+          setGuides(cachedGuides)
+          setUsingCachedData(true)
+        } else {
+          setGuides([])
+        }
       } else if (guidesData) {
         // Parse JSON fields if needed
         const parsedGuides = guidesData.map((g: CommunityGuide) => ({
@@ -67,14 +90,31 @@ export default function GuidesPage() {
           local_resources: typeof g.local_resources === 'string' ? JSON.parse(g.local_resources as unknown as string) : g.local_resources,
         }))
         setGuides(parsedGuides)
+        // Cache the guides for offline use
+        try {
+          await saveGuides(parsedGuides)
+        } catch (cacheErr) {
+          console.warn('Could not cache guides:', cacheErr)
+        }
       }
     } catch (err) {
       console.error('Error fetching guides:', err)
-      setError('Failed to load response plans')
+      // Try to load from cache on error
+      try {
+        const cachedGuides = await getGuides(activeCommunity.id)
+        if (cachedGuides.length > 0) {
+          setGuides(cachedGuides)
+          setUsingCachedData(true)
+        } else {
+          setError('Failed to load response plans')
+        }
+      } catch {
+        setError('Failed to load response plans')
+      }
     } finally {
       setIsLoading(false)
     }
-  }, [user, activeCommunity, canEdit])
+  }, [user, activeCommunity, canManageActiveCommunity, isOffline])
 
   useEffect(() => {
     fetchGuides()
@@ -237,6 +277,25 @@ export default function GuidesPage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <span className="material-icons animate-spin text-4xl text-primary">sync</span>
+      </div>
+    )
+  }
+
+  // Offline/cached data banner component
+  const OfflineBanner = () => {
+    if (!isOffline && !usingCachedData) return null
+    return (
+      <div className={`rounded-lg border px-4 py-3 mb-4 flex items-center gap-2 ${
+        isOffline
+          ? 'border-amber-500/30 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300'
+          : 'border-blue-500/30 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
+      }`}>
+        <span className="material-icons text-lg">{isOffline ? 'cloud_off' : 'cached'}</span>
+        <span className="text-sm">
+          {isOffline
+            ? 'You are offline. Showing cached data.'
+            : 'Showing cached data due to connection issues.'}
+        </span>
       </div>
     )
   }
@@ -627,6 +686,8 @@ export default function GuidesPage() {
           </button>
         )}
       </div>
+
+      <OfflineBanner />
 
       {error && (
         <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
