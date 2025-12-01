@@ -209,6 +209,7 @@ export interface Database {
           recipient_count: number
           email_sent_count: number
           sms_sent_count: number
+          push_sent_count: number
           recipient_group: string | null
           created_at: string
           updated_at: string
@@ -234,6 +235,7 @@ export interface Database {
           recipient_count?: number
           email_sent_count?: number
           sms_sent_count?: number
+          push_sent_count?: number
           recipient_group?: string | null
           created_at?: string
           updated_at?: string
@@ -259,6 +261,7 @@ export interface Database {
           recipient_count?: number
           email_sent_count?: number
           sms_sent_count?: number
+          push_sent_count?: number
           recipient_group?: string | null
           created_at?: string
           updated_at?: string
@@ -814,6 +817,43 @@ export interface Database {
           {
             foreignKeyName: 'community_map_points_created_by_fkey'
             columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          endpoint: string
+          p256dh: string
+          auth: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          endpoint?: string
+          p256dh?: string
+          auth?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'push_subscriptions_user_id_fkey'
+            columns: ['user_id']
             referencedRelation: 'profiles'
             referencedColumns: ['id']
           }

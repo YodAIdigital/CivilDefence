@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/server'
 import { sendEmail, getCommunityAlertEmail } from '@/lib/email'
 import { sendSms, formatAlertSms } from '@/lib/sms'
+import { sendPushNotificationToMany, getAlertLevelEmoji, type PushSubscriptionData } from '@/lib/web-push'
 
 type AlertLevel = 'info' | 'warning' | 'danger'
 type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
@@ -342,13 +343,75 @@ export async function POST(request: NextRequest) {
     }
     console.log('=== END SMS DEBUG ===')
 
+    // Send push notifications if app alert is enabled
+    let pushSent = 0
+    let pushFailed = 0
+    const expiredSubscriptions: string[] = []
+
+    if (sendAppAlert) {
+      console.log('=== PUSH NOTIFICATION DEBUG ===')
+      console.log('Fetching push subscriptions for', recipientUserIds.length, 'users')
+
+      // Fetch push subscriptions for all recipients
+      const { data: subscriptions, error: subsError } = await supabase
+        .from('push_subscriptions')
+        .select('endpoint, p256dh, auth, user_id')
+        .in('user_id', recipientUserIds)
+
+      if (subsError) {
+        console.error('Failed to fetch push subscriptions:', subsError)
+      } else if (subscriptions && subscriptions.length > 0) {
+        console.log('Found', subscriptions.length, 'push subscriptions')
+
+        const pushSubs: PushSubscriptionData[] = subscriptions.map(s => ({
+          endpoint: s.endpoint,
+          p256dh: s.p256dh,
+          auth: s.auth,
+        }))
+
+        const emoji = getAlertLevelEmoji(alertLevel)
+        const result = await sendPushNotificationToMany(pushSubs, {
+          title: `${emoji} ${title}`,
+          body: message,
+          tag: `alert-${alertId}`,
+          data: {
+            type: 'alert',
+            alertId,
+            communityId,
+            level: alertLevel,
+            url: '/dashboard',
+          },
+          requireInteraction: alertLevel === 'danger',
+        })
+
+        pushSent = result.sent
+        pushFailed = result.failed
+        expiredSubscriptions.push(...result.expiredEndpoints)
+
+        console.log('Push results:', { pushSent, pushFailed, expired: expiredSubscriptions.length })
+
+        // Clean up expired subscriptions
+        if (expiredSubscriptions.length > 0) {
+          console.log('Cleaning up', expiredSubscriptions.length, 'expired subscriptions')
+          await supabase
+            .from('push_subscriptions')
+            .delete()
+            .in('endpoint', expiredSubscriptions)
+        }
+      } else {
+        console.log('No push subscriptions found for recipients')
+      }
+      console.log('=== END PUSH NOTIFICATION DEBUG ===')
+    }
+
     // Update alert with actual sent counts
-    if (alertId && (emailsSent > 0 || smsSent > 0)) {
+    if (alertId && (emailsSent > 0 || smsSent > 0 || pushSent > 0)) {
       await supabase
         .from('alerts')
         .update({
           email_sent_count: emailsSent,
           sms_sent_count: smsSent,
+          push_sent_count: pushSent,
         })
         .eq('id', alertId)
     }
@@ -359,6 +422,7 @@ export async function POST(request: NextRequest) {
       recipientCount: recipientUserIds.length,
       emailsSent,
       smsSent,
+      pushSent,
       emailErrors: emailErrors.length > 0 ? emailErrors : undefined,
       smsErrors: smsErrors.length > 0 ? smsErrors : undefined,
     })

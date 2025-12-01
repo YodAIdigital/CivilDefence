@@ -3,12 +3,14 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react'
 import {
   isNotificationSupported,
+  isPushSupported,
   getNotificationPermission,
   requestNotificationPermission,
   registerServiceWorker,
   showAlertNotification,
   type NotificationPermissionStatus,
 } from '@/lib/notifications'
+import { useAuth } from '@/contexts/auth-context'
 
 interface NotificationContextValue {
   // Permission state
@@ -61,7 +63,79 @@ function isBannerDismissedValid(): boolean {
   }
 }
 
+// Helper to save push subscription to server
+async function savePushSubscription(userId: string): Promise<boolean> {
+  if (!isPushSupported()) {
+    console.log('[NotificationContext] Push not supported, skipping subscription save')
+    return false
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready
+    let subscription = await registration.pushManager.getSubscription()
+
+    // If no subscription exists, create one
+    if (!subscription) {
+      const vapidPublicKey = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY
+      if (!vapidPublicKey || vapidPublicKey === 'your_vapid_public_key') {
+        console.warn('[NotificationContext] VAPID key not configured')
+        return false
+      }
+
+      // Convert VAPID key to Uint8Array
+      const padding = '='.repeat((4 - (vapidPublicKey.length % 4)) % 4)
+      const base64 = (vapidPublicKey + padding).replace(/-/g, '+').replace(/_/g, '/')
+      const rawData = window.atob(base64)
+      const applicationServerKey = new Uint8Array(rawData.length)
+      for (let i = 0; i < rawData.length; ++i) {
+        applicationServerKey[i] = rawData.charCodeAt(i)
+      }
+
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
+      })
+      console.log('[NotificationContext] Created new push subscription')
+    }
+
+    // Get subscription keys
+    const subscriptionJson = subscription.toJSON()
+    if (!subscriptionJson.endpoint || !subscriptionJson.keys?.p256dh || !subscriptionJson.keys?.auth) {
+      console.error('[NotificationContext] Invalid subscription data')
+      return false
+    }
+
+    // Save to server
+    const response = await fetch('/api/push-subscription', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId,
+        subscription: {
+          endpoint: subscriptionJson.endpoint,
+          keys: {
+            p256dh: subscriptionJson.keys.p256dh,
+            auth: subscriptionJson.keys.auth,
+          },
+        },
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('[NotificationContext] Failed to save subscription to server')
+      return false
+    }
+
+    console.log('[NotificationContext] Push subscription saved successfully')
+    return true
+  } catch (error) {
+    console.error('[NotificationContext] Error saving push subscription:', error)
+    return false
+  }
+}
+
 export function NotificationProvider({ children }: NotificationProviderProps) {
+  const { user } = useAuth()
   const [permission, setPermission] = useState<NotificationPermissionStatus>('default')
   const [isSupported, setIsSupported] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -82,6 +156,11 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
         // Register service worker
         await registerServiceWorker()
 
+        // If permission already granted and user is logged in, ensure subscription is saved
+        if (currentPermission === 'granted' && user?.id) {
+          await savePushSubscription(user.id)
+        }
+
         // Check if banner was dismissed (and dismissal is still valid)
         // Also don't show if permission is already granted or denied
         const dismissed = currentPermission === 'granted' || currentPermission === 'denied' || isBannerDismissedValid()
@@ -92,7 +171,7 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     }
 
     initNotifications()
-  }, [])
+  }, [user?.id])
 
   // Request notification permission
   const requestPermission = useCallback(async (): Promise<NotificationPermissionStatus> => {
@@ -103,14 +182,19 @@ export function NotificationProvider({ children }: NotificationProviderProps) {
     const newPermission = await requestNotificationPermission()
     setPermission(newPermission)
 
-    // If granted, dismiss the banner
+    // If granted, dismiss the banner and save push subscription
     if (newPermission === 'granted') {
       setBannerDismissed(true)
       localStorage.setItem(PERMISSION_BANNER_DISMISSED_KEY, 'true')
+
+      // Save push subscription if user is logged in
+      if (user?.id) {
+        await savePushSubscription(user.id)
+      }
     }
 
     return newPermission
-  }, [isSupported])
+  }, [isSupported, user?.id])
 
   // Send an alert notification
   const sendAlertNotification = useCallback(
