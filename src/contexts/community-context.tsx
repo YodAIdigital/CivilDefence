@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from './auth-context'
-import type { CommunityRole } from '@/types/database'
+import type { CommunityRole, RegionPolygon } from '@/types/database'
 
 interface Community {
   id: string
@@ -24,6 +24,9 @@ interface Community {
   meeting_point_lat?: number
   meeting_point_lng?: number
   created_by?: string
+  region_polygon?: RegionPolygon | null
+  region_color?: string | null
+  region_opacity?: number | null
 }
 
 // Community with user's role in that community

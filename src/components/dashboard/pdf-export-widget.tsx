@@ -12,7 +12,140 @@ import {
   KeyLocation,
   UserProfileData,
 } from '@/lib/pdf-export'
-import type { CommunityGuide, Community, ProfileExtended } from '@/types/database'
+import type { CommunityGuide, Community, ProfileExtended, CommunityMapPoint, RegionPolygon } from '@/types/database'
+
+// Function to generate a static map image URL using Google Maps Static API
+function generateStaticMapUrl(
+  community: {
+    meeting_point_lat?: number | null
+    meeting_point_lng?: number | null
+    region_polygon?: RegionPolygon | null
+    region_color?: string | null
+  },
+  keyLocations: KeyLocation[],
+  mapPoints: CommunityMapPoint[]
+): string | null {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
+  if (!apiKey) return null
+
+  // Collect all markers
+  const markers: { lat: number; lng: number; color: string; label?: string }[] = []
+
+  // Add meeting point
+  if (community.meeting_point_lat && community.meeting_point_lng) {
+    markers.push({
+      lat: community.meeting_point_lat,
+      lng: community.meeting_point_lng,
+      color: 'green',
+      label: 'M'
+    })
+  }
+
+  // Add key locations
+  keyLocations.forEach((loc, idx) => {
+    if (loc.lat && loc.lng) {
+      markers.push({
+        lat: loc.lat,
+        lng: loc.lng,
+        color: loc.type === 'meeting_point' ? 'green' : 'blue',
+        label: String(idx + 1).slice(0, 1)
+      })
+    }
+  })
+
+  // Add community map points
+  mapPoints.forEach((point) => {
+    if (point.lat && point.lng) {
+      const colorMap: Record<string, string> = {
+        meeting_point: 'green',
+        fire_station: 'red',
+        hospital: 'blue',
+        police: 'purple',
+        resource: 'orange',
+        other: 'gray'
+      }
+      markers.push({
+        lat: point.lat,
+        lng: point.lng,
+        color: colorMap[point.point_type] || 'red'
+      })
+    }
+  })
+
+  if (markers.length === 0) return null
+
+  // Calculate center from markers
+  const lats = markers.map(m => m.lat)
+  const lngs = markers.map(m => m.lng)
+
+  // Include polygon points in bounds calculation if available
+  if (community.region_polygon && community.region_polygon.length > 0) {
+    community.region_polygon.forEach(coord => {
+      lats.push(coord.lat)
+      lngs.push(coord.lng)
+    })
+  }
+
+  const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2
+  const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2
+
+  // Build marker params
+  const markerParams = markers.map(m => {
+    return `markers=color:${m.color}%7C${m.lat},${m.lng}`
+  }).join('&')
+
+  // Build polygon path param if region polygon exists
+  let pathParam = ''
+  if (community.region_polygon && community.region_polygon.length >= 3) {
+    // Convert region color to hex format for Google Maps Static API
+    // Default to blue if no color specified
+    let fillColor = '3b82f6' // default blue
+    let strokeColor = '3b82f6'
+
+    if (community.region_color) {
+      // Remove # if present and use the color
+      fillColor = community.region_color.replace('#', '')
+      strokeColor = fillColor
+    }
+
+    // Build path coordinates string (close the polygon by adding first point at end)
+    const polygon = community.region_polygon
+    const pathCoords = polygon
+      .map(coord => `${coord.lat},${coord.lng}`)
+      .join('%7C')
+    const firstPoint = polygon[0]
+    const closedPath = firstPoint ? `${pathCoords}%7C${firstPoint.lat},${firstPoint.lng}` : pathCoords
+
+    // fillcolor:0xAARRGGBB (AA = alpha, semi-transparent)
+    // color:0xRRGGBB (stroke color)
+    pathParam = `&path=fillcolor:0x${fillColor}40%7Ccolor:0x${strokeColor}FF%7Cweight:2%7C${closedPath}`
+  }
+
+  // Generate URL - increase size for taller map (600x450 for 50% taller)
+  const url = `https://maps.googleapis.com/maps/api/staticmap?center=${centerLat},${centerLng}&zoom=12&size=600x450&maptype=roadmap&${markerParams}${pathParam}&key=${apiKey}`
+
+  return url
+}
+
+// Function to fetch image and convert to base64
+async function fetchImageAsBase64(url: string): Promise<string | null> {
+  try {
+    const response = await fetch(url)
+    if (!response.ok) return null
+    const blob = await response.blob()
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        const base64 = reader.result as string
+        resolve(base64)
+      }
+      reader.onerror = () => resolve(null)
+      reader.readAsDataURL(blob)
+    })
+  } catch {
+    return null
+  }
+}
 
 // Default emergency contacts (NZ)
 const defaultContacts: EmergencyContact[] = [
@@ -170,6 +303,32 @@ export function PDFExportWidget() {
         }
       })
 
+      // Fetch community map points for the static map
+      let mapPoints: CommunityMapPoint[] = []
+      try {
+        const { data: mapPointsData } = await supabase
+          .from('community_map_points')
+          .select('*')
+          .eq('community_id', activeCommunity.id)
+          .eq('is_active', true)
+
+        if (mapPointsData) {
+          mapPoints = mapPointsData as unknown as CommunityMapPoint[]
+        }
+      } catch {
+        // Ignore map points fetch errors
+      }
+
+      // Generate static map image
+      let mapImageBase64: string | undefined
+      const staticMapUrl = generateStaticMapUrl(activeCommunity, keyLocations, mapPoints)
+      if (staticMapUrl) {
+        const base64 = await fetchImageAsBase64(staticMapUrl)
+        if (base64) {
+          mapImageBase64 = base64
+        }
+      }
+
       // Collect emergency contacts from guides
       const guideContacts: EmergencyContact[] = []
       guides.forEach(guide => {
@@ -203,6 +362,7 @@ export function PDFExportWidget() {
         keyLocations,
         generatedDate: new Date(),
         userProfile: userProfileData,
+        ...(mapImageBase64 && { mapImageBase64 }),
       }
 
       await downloadEmergencyPDF(exportData)

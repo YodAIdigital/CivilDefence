@@ -82,6 +82,7 @@ interface PDFExportData {
   keyLocations: KeyLocation[]
   generatedDate: Date
   userProfile?: UserProfileData
+  mapImageBase64?: string // Optional base64 encoded map image
 }
 
 // Theme colors (keeping for potential future use)
@@ -98,15 +99,16 @@ const _COLORS = {
 }
 void _COLORS // Suppress unused variable warning
 
-// Helper to add page numbers
+// Helper to add page numbers (skip cover page)
 function addPageNumbers(doc: jsPDF) {
   const totalPages = doc.getNumberOfPages()
-  for (let i = 1; i <= totalPages; i++) {
+  // Start from page 2 to skip cover page
+  for (let i = 2; i <= totalPages; i++) {
     doc.setPage(i)
     doc.setFontSize(9)
     doc.setTextColor(150, 150, 150)
     doc.text(
-      `Page ${i} of ${totalPages}`,
+      `Page ${i - 1} of ${totalPages - 1}`,
       doc.internal.pageSize.getWidth() / 2,
       doc.internal.pageSize.getHeight() - 10,
       { align: 'center' }
@@ -114,24 +116,17 @@ function addPageNumbers(doc: jsPDF) {
   }
 }
 
-// Helper to add section header
+// Helper to add section header (centered, no background/border)
 function addSectionHeader(doc: jsPDF, title: string, y: number, _icon?: string): number {
   const pageWidth = doc.internal.pageSize.getWidth()
 
-  // Draw light gray background bar with border
-  doc.setFillColor(240, 240, 245)
-  doc.rect(15, y, pageWidth - 30, 10, 'F')
-  doc.setDrawColor(200, 200, 200)
-  doc.setLineWidth(0.3)
-  doc.rect(15, y, pageWidth - 30, 10, 'S')
-
-  // Title text in dark color for contrast
-  doc.setFontSize(14)
+  // Centered title text, no background or border
+  doc.setFontSize(16)
   doc.setTextColor(0, 5, 66)
   doc.setFont('helvetica', 'bold')
-  doc.text(title.toUpperCase(), 20, y + 7)
+  doc.text(title.toUpperCase(), pageWidth / 2, y + 7, { align: 'center' })
 
-  return y + 15
+  return y + 18
 }
 
 // Helper to check if we need a new page
@@ -149,128 +144,118 @@ function generateCoverPage(doc: jsPDF, data: PDFExportData): void {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
 
-  // Background gradient effect (using rectangles)
-  doc.setFillColor(0, 5, 66) // primary
-  doc.rect(0, 0, pageWidth, pageHeight * 0.45, 'F')
+  // Solid white background (print-friendly)
+  doc.setFillColor(255, 255, 255)
+  doc.rect(0, 0, pageWidth, pageHeight, 'F')
 
-  doc.setFillColor(49, 58, 100) // secondary
-  doc.rect(0, pageHeight * 0.45, pageWidth, pageHeight * 0.55, 'F')
+  // CivilDefencePro title (matching email branding style)
+  // "Civil" normal + "Defence" bold + "Pro" normal
+  const titleY = 35
+  doc.setFontSize(28)
 
-  // Civil Defence title
-  doc.setFontSize(12)
-  doc.setTextColor(254, 177, 0) // accent
+  // Calculate total width for centering
+  doc.setFont('helvetica', 'normal')
+  const civilWidth = doc.getTextWidth('Civil')
   doc.setFont('helvetica', 'bold')
-  doc.text('CIVIL DEFENCE', pageWidth / 2, 25, { align: 'center' })
+  const defenceWidth = doc.getTextWidth('Defence')
+  doc.setFont('helvetica', 'normal')
+  const proWidth = doc.getTextWidth('Pro')
+  const totalTitleWidth = civilWidth + defenceWidth + proWidth
 
-  // Emergency Response Plan title
-  doc.setFontSize(24)
-  doc.setTextColor(255, 255, 255)
-  doc.text('EMERGENCY RESPONSE', pageWidth / 2, 45, { align: 'center' })
-  doc.text('PLAN', pageWidth / 2, 57, { align: 'center' })
+  let titleX = (pageWidth - totalTitleWidth) / 2
 
-  // User name if available (personalized plan)
+  // Draw "Civil" in normal weight, dark color
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(0, 5, 66) // primary dark blue
+  doc.text('Civil', titleX, titleY)
+  titleX += civilWidth
+
+  // Draw "Defence" in bold, accent color
+  doc.setFont('helvetica', 'bold')
+  doc.setTextColor(254, 177, 0) // accent yellow
+  doc.text('Defence', titleX, titleY)
+  titleX += defenceWidth
+
+  // Draw "Pro" in normal weight, dark color
+  doc.setFont('helvetica', 'normal')
+  doc.setTextColor(0, 5, 66)
+  doc.text('Pro', titleX, titleY)
+
+  // Emergency Response Plan title (on one line)
+  doc.setFontSize(22)
+  doc.setTextColor(0, 5, 66) // dark text for print-friendly
+  doc.setFont('helvetica', 'bold')
+  doc.text('EMERGENCY RESPONSE PLAN', pageWidth / 2, 55, { align: 'center' })
+
+  // Prepared for: {NAME} on one line with same font style
+  let nextY = 80
   if (data.userProfile?.full_name) {
-    doc.setFontSize(12)
-    doc.setTextColor(200, 200, 200)
+    doc.setFontSize(14)
+    doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'normal')
-    doc.text('Prepared for', pageWidth / 2, 75, { align: 'center' })
-
-    doc.setFontSize(18)
-    doc.setTextColor(254, 177, 0) // accent
-    doc.setFont('helvetica', 'bold')
-    doc.text(data.userProfile.full_name, pageWidth / 2, 88, { align: 'center' })
+    doc.text(`Prepared for: ${data.userProfile.full_name}`, pageWidth / 2, nextY, { align: 'center' })
+    nextY += 20
   }
 
   // Community name
   doc.setFontSize(10)
-  doc.setTextColor(200, 200, 200)
+  doc.setTextColor(100, 100, 100)
   doc.setFont('helvetica', 'normal')
-  doc.text('Community', pageWidth / 2, 105, { align: 'center' })
+  doc.text('Community', pageWidth / 2, nextY, { align: 'center' })
 
   doc.setFontSize(16)
-  doc.setTextColor(255, 255, 255)
+  doc.setTextColor(0, 5, 66)
   doc.setFont('helvetica', 'bold')
-  doc.text(data.community.name, pageWidth / 2, 117, { align: 'center' })
+  doc.text(data.community.name, pageWidth / 2, nextY + 12, { align: 'center' })
 
   // Community description
-  let nextY = 130
+  nextY += 30
   if (data.community.description) {
     doc.setFontSize(10)
-    doc.setTextColor(180, 180, 180)
+    doc.setTextColor(100, 100, 100)
     doc.setFont('helvetica', 'normal')
     const lines = doc.splitTextToSize(data.community.description, pageWidth - 60)
     doc.text(lines.slice(0, 2), pageWidth / 2, nextY, { align: 'center' })
-    nextY += lines.slice(0, 2).length * 5 + 10
+    nextY += lines.slice(0, 2).length * 5 + 15
   }
 
-  // User address box if available
-  if (data.userProfile?.address) {
-    const boxY = nextY
-    doc.setFillColor(255, 255, 255)
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 0.1 }))
-    doc.roundedRect(30, boxY, pageWidth - 60, 28, 3, 3, 'F')
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 1 }))
-
-    doc.setFontSize(9)
-    doc.setTextColor(200, 200, 200)
-    doc.text('MY ADDRESS', pageWidth / 2, boxY + 10, { align: 'center' })
-
-    doc.setFontSize(11)
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    const addressLines = doc.splitTextToSize(data.userProfile.address, pageWidth - 70)
-    doc.text(addressLines[0], pageWidth / 2, boxY + 20, { align: 'center' })
-    nextY = boxY + 35
-  }
-
-  // Meeting Point info
+  // Meeting Point info (vertically centered in remaining space)
   if (data.community.meeting_point_name) {
-    const boxY = Math.max(nextY, 175)
+    // Calculate vertical center position for meeting point box
+    const boxHeight = 45
+    const boxY = Math.max(nextY + 10, (pageHeight - 60 - boxHeight) / 2)
+
     doc.setDrawColor(254, 177, 0)
-    doc.setLineWidth(1)
-    doc.roundedRect(30, boxY, pageWidth - 60, 38, 3, 3, 'S')
+    doc.setLineWidth(1.5)
+    doc.roundedRect(30, boxY, pageWidth - 60, boxHeight, 3, 3, 'S')
 
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(254, 177, 0)
-    doc.text('EMERGENCY MEETING POINT', pageWidth / 2, boxY + 12, { align: 'center' })
-
-    doc.setFontSize(12)
-    doc.setTextColor(255, 255, 255)
     doc.setFont('helvetica', 'bold')
-    doc.text(data.community.meeting_point_name, pageWidth / 2, boxY + 24, { align: 'center' })
+    doc.text('EMERGENCY MEETING POINT', pageWidth / 2, boxY + 14, { align: 'center' })
+
+    doc.setFontSize(14)
+    doc.setTextColor(0, 5, 66)
+    doc.setFont('helvetica', 'bold')
+    doc.text(data.community.meeting_point_name, pageWidth / 2, boxY + 27, { align: 'center' })
 
     if (data.community.meeting_point_address) {
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
-      doc.text(data.community.meeting_point_address, pageWidth / 2, boxY + 33, { align: 'center' })
+      doc.setTextColor(80, 80, 80)
+      doc.text(data.community.meeting_point_address, pageWidth / 2, boxY + 38, { align: 'center' })
     }
   }
 
-  // User contact numbers at bottom
-  if (data.userProfile?.mobile_number || data.userProfile?.phone) {
-    const contactY = pageHeight - 65
-    doc.setFontSize(9)
-    doc.setTextColor(180, 180, 180)
-    doc.setFont('helvetica', 'normal')
-    doc.text('MY CONTACT NUMBERS', pageWidth / 2, contactY, { align: 'center' })
+  // Emergency number reminder (at bottom)
+  doc.setFontSize(12)
+  doc.setTextColor(239, 68, 68) // red for emergency
+  doc.setFont('helvetica', 'bold')
+  doc.text('IN AN EMERGENCY CALL 111', pageWidth / 2, pageHeight - 25, { align: 'center' })
 
-    doc.setFontSize(11)
-    doc.setTextColor(255, 255, 255)
-    doc.setFont('helvetica', 'bold')
-    const phone = data.userProfile.mobile_number || data.userProfile.phone || ''
-    doc.text(phone, pageWidth / 2, contactY + 10, { align: 'center' })
-
-    if (data.userProfile.secondary_number) {
-      doc.setFontSize(9)
-      doc.setFont('helvetica', 'normal')
-      doc.setTextColor(180, 180, 180)
-      doc.text(`Secondary: ${data.userProfile.secondary_number}`, pageWidth / 2, contactY + 18, { align: 'center' })
-    }
-  }
-
-  // Generated date at bottom
+  // Generated date below emergency number
   doc.setFontSize(8)
-  doc.setTextColor(120, 120, 120)
+  doc.setTextColor(150, 150, 150)
   doc.setFont('helvetica', 'normal')
   doc.text(
     `Generated: ${data.generatedDate.toLocaleDateString('en-NZ', {
@@ -279,15 +264,9 @@ function generateCoverPage(doc: jsPDF, data: PDFExportData): void {
       year: 'numeric'
     })}`,
     pageWidth / 2,
-    pageHeight - 28,
+    pageHeight - 15,
     { align: 'center' }
   )
-
-  // Emergency number reminder
-  doc.setFontSize(11)
-  doc.setTextColor(254, 177, 0)
-  doc.setFont('helvetica', 'bold')
-  doc.text('IN AN EMERGENCY CALL 111', pageWidth / 2, pageHeight - 18, { align: 'center' })
 }
 
 // Generate Map Page with Key Locations
@@ -298,32 +277,48 @@ function generateMapPage(doc: jsPDF, data: PDFExportData): void {
   let y = 20
   y = addSectionHeader(doc, 'Key Locations & Emergency Services', y)
 
-  // Meeting point first if exists
-  if (data.community.meeting_point_name) {
-    y += 5
-    doc.setFillColor(254, 177, 0, 0.1)
-    doc.roundedRect(15, y, pageWidth - 30, 35, 3, 3, 'F')
-    doc.setDrawColor(254, 177, 0)
-    doc.setLineWidth(0.5)
-    doc.roundedRect(15, y, pageWidth - 30, 35, 3, 3, 'S')
+  // Map area - 50% taller for better visibility
+  const mapHeight = 105
+  y += 5
 
-    doc.setFontSize(10)
-    doc.setTextColor(200, 150, 0)
-    doc.setFont('helvetica', 'bold')
-    doc.text('COMMUNITY MEETING POINT', 25, y + 12)
-
-    doc.setFontSize(14)
-    doc.setTextColor(0, 5, 66)
-    doc.text(data.community.meeting_point_name, 25, y + 24)
-
-    if (data.community.meeting_point_address) {
-      doc.setFontSize(10)
-      doc.setTextColor(100, 100, 100)
+  // If we have a map image, add it
+  if (data.mapImageBase64) {
+    try {
+      doc.addImage(data.mapImageBase64, 'PNG', 15, y, pageWidth - 30, mapHeight)
+      // Add border around the map
+      doc.setDrawColor(200, 200, 210)
+      doc.setLineWidth(0.5)
+      doc.roundedRect(15, y, pageWidth - 30, mapHeight, 3, 3, 'S')
+    } catch {
+      // If image fails to load, show placeholder
+      doc.setFillColor(245, 247, 250)
+      doc.roundedRect(15, y, pageWidth - 30, mapHeight, 3, 3, 'F')
+      doc.setDrawColor(200, 200, 210)
+      doc.setLineWidth(0.5)
+      doc.roundedRect(15, y, pageWidth - 30, mapHeight, 3, 3, 'S')
+      doc.setFontSize(11)
+      doc.setTextColor(120, 120, 130)
       doc.setFont('helvetica', 'normal')
-      doc.text(data.community.meeting_point_address, 25, y + 32)
+      doc.text('Map image could not be loaded', pageWidth / 2, y + mapHeight / 2, { align: 'center' })
     }
-    y += 45
+  } else {
+    // Draw map placeholder box
+    doc.setFillColor(245, 247, 250)
+    doc.roundedRect(15, y, pageWidth - 30, mapHeight, 3, 3, 'F')
+    doc.setDrawColor(200, 200, 210)
+    doc.setLineWidth(0.5)
+    doc.roundedRect(15, y, pageWidth - 30, mapHeight, 3, 3, 'S')
+
+    // Map placeholder text
+    doc.setFontSize(11)
+    doc.setTextColor(120, 120, 130)
+    doc.setFont('helvetica', 'normal')
+    doc.text('Regional Map', pageWidth / 2, y + mapHeight / 2 - 5, { align: 'center' })
+    doc.setFontSize(9)
+    doc.text('View interactive map with directions in the CivilDefencePro app', pageWidth / 2, y + mapHeight / 2 + 5, { align: 'center' })
   }
+
+  y += mapHeight + 10
 
   // Key locations table
   if (data.keyLocations.length > 0) {
@@ -353,10 +348,11 @@ function generateMapPage(doc: jsPDF, data: PDFExportData): void {
         fillColor: [235, 235, 240],
         textColor: [0, 5, 66],
         fontStyle: 'bold',
+        fontSize: 11,
       },
       styles: {
-        fontSize: 9,
-        cellPadding: 4,
+        fontSize: 10,
+        cellPadding: 5,
         textColor: [50, 50, 50],
       },
       columnStyles: {
@@ -367,59 +363,44 @@ function generateMapPage(doc: jsPDF, data: PDFExportData): void {
       },
     })
   }
-
-  // Map placeholder note
-  const mapY = doc.lastAutoTable?.finalY || y
-  doc.setFontSize(9)
-  doc.setTextColor(100, 100, 100)
-  doc.setFont('helvetica', 'italic')
-  doc.text(
-    'Note: For interactive maps with directions, view these locations in the Civil Defence app.',
-    15,
-    mapY + 15
-  )
 }
 
 // Generate Response Plans Pages
 function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
   if (data.guides.length === 0) return
 
-  doc.addPage()
   const pageWidth = doc.internal.pageSize.getWidth()
 
-  let y = 20
-  y = addSectionHeader(doc, 'Emergency Response Plans', y)
-  y += 5
-
   data.guides.forEach((guide, guideIndex) => {
-    // Check for new page
-    y = checkNewPage(doc, y, 60)
+    // Start each response plan on a new page
+    doc.addPage()
+    let y = 20
 
-    if (guideIndex > 0) {
-      y += 10
+    // Add section header only on first guide
+    if (guideIndex === 0) {
+      y = addSectionHeader(doc, 'Emergency Response Plans', y)
+      y += 5
     }
 
-    // Guide header - light background with border for readability
-    doc.setFillColor(245, 245, 250)
-    doc.roundedRect(15, y, pageWidth - 30, 25, 3, 3, 'F')
+    // Guide header - no background fill, just border
     doc.setDrawColor(180, 180, 190)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(15, y, pageWidth - 30, 25, 3, 3, 'S')
+    doc.setLineWidth(0.5)
+    doc.roundedRect(15, y, pageWidth - 30, 28, 3, 3, 'S')
 
     doc.setFontSize(14)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
-    doc.text(guide.name, 25, y + 10)
+    doc.text(guide.name, 25, y + 12)
 
     if (guide.description) {
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(80, 80, 80)
-      const descLines = doc.splitTextToSize(guide.description, pageWidth - 60)
-      doc.text(descLines.slice(0, 2), 25, y + 18)
+      const descLines = doc.splitTextToSize(guide.description, pageWidth - 50)
+      doc.text(descLines.slice(0, 2), 25, y + 21)
     }
 
-    y += 30
+    y += 35
 
     // Before, During, After sections
     const phases = [
@@ -436,47 +417,48 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
 
       // Phase header
       doc.setFillColor(...phase.color)
-      doc.roundedRect(20, y, pageWidth - 40, 8, 2, 2, 'F')
+      doc.roundedRect(20, y, pageWidth - 40, 10, 2, 2, 'F')
 
-      doc.setFontSize(10)
+      doc.setFontSize(11)
       doc.setTextColor(255, 255, 255)
       doc.setFont('helvetica', 'bold')
-      doc.text(phase.title, 25, y + 5.5)
+      doc.text(phase.title, 25, y + 7)
 
-      y += 12
+      // 18px spacing below phase header (approximately 6.35mm)
+      y += 16
 
       // Section items
       sections.forEach((section: GuideSection) => {
         y = checkNewPage(doc, y, 25)
 
-        doc.setFontSize(10)
+        doc.setFontSize(11)
         doc.setTextColor(0, 5, 66)
         doc.setFont('helvetica', 'bold')
         doc.text(`• ${section.title}`, 25, y)
 
-        y += 5
-        doc.setFontSize(9)
+        y += 6
+        doc.setFontSize(10)
         doc.setTextColor(80, 80, 80)
         doc.setFont('helvetica', 'normal')
         const contentLines = doc.splitTextToSize(section.content, pageWidth - 60)
         doc.text(contentLines, 30, y)
-        y += contentLines.length * 4 + 3
+        y += contentLines.length * 5 + 4
       })
 
-      y += 5
+      y += 8
     })
 
     // Supplies list
     if (guide.supplies && guide.supplies.length > 0) {
       y = checkNewPage(doc, y, 30)
 
-      doc.setFontSize(10)
+      doc.setFontSize(11)
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
       doc.text('Required Supplies:', 25, y)
-      y += 5
+      y += 7
 
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setTextColor(80, 80, 80)
       doc.setFont('helvetica', 'normal')
 
@@ -488,7 +470,7 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
         const row = Math.floor(idx / suppliesPerRow)
 
         if (col === 0 && row > 0) {
-          y += 5
+          y += 6
           y = checkNewPage(doc, y, 10)
         }
 
@@ -496,31 +478,32 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
         const checkboxX = 30 + col * colWidth
         doc.setDrawColor(100, 100, 100)
         doc.setLineWidth(0.3)
-        doc.rect(checkboxX, y - 3, 3, 3)
-        doc.text(supply, checkboxX + 5, y)
+        doc.rect(checkboxX, y - 3, 4, 4)
+        doc.text(supply, checkboxX + 7, y)
       })
-      y += 10
+      y += 12
     }
 
     // Emergency contacts for this guide
     if (guide.emergency_contacts && guide.emergency_contacts.length > 0) {
       y = checkNewPage(doc, y, 30)
 
-      doc.setFontSize(10)
+      doc.setFontSize(11)
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
       doc.text('Emergency Contacts for this Plan:', 25, y)
-      y += 6
+      y += 8
 
       guide.emergency_contacts.forEach(contact => {
         y = checkNewPage(doc, y, 10)
-        doc.setFontSize(9)
+        doc.setFontSize(10)
         doc.setTextColor(80, 80, 80)
         doc.setFont('helvetica', 'bold')
-        doc.text(`${contact.name}: `, 30, y)
+        doc.text(contact.name, 30, y)
         doc.setFont('helvetica', 'normal')
-        doc.text(`${contact.number} - ${contact.description}`, 30 + doc.getTextWidth(`${contact.name}: `), y)
-        y += 5
+        // Add proper spacing between name and number
+        doc.text(` - ${contact.number} - ${contact.description}`, 30 + doc.getTextWidth(contact.name), y)
+        y += 7
       })
     }
   })
@@ -537,16 +520,16 @@ function generateContactsPage(doc: jsPDF, data: PDFExportData): void {
   // Emergency banner
   y += 5
   doc.setFillColor(239, 68, 68)
-  doc.roundedRect(15, y, pageWidth - 30, 20, 3, 3, 'F')
+  doc.roundedRect(15, y, pageWidth - 30, 22, 3, 3, 'F')
 
   doc.setFontSize(14)
   doc.setTextColor(255, 255, 255)
   doc.setFont('helvetica', 'bold')
-  doc.text('FOR LIFE-THREATENING EMERGENCIES CALL 111', pageWidth / 2, y + 13, { align: 'center' })
+  doc.text('FOR LIFE-THREATENING EMERGENCIES CALL 111', pageWidth / 2, y + 14, { align: 'center' })
 
-  y += 30
+  y += 32
 
-  // Contacts table
+  // Contacts table with larger fonts
   if (data.contacts.length > 0) {
     const tableData = data.contacts.map(contact => [
       contact.name,
@@ -563,23 +546,24 @@ function generateContactsPage(doc: jsPDF, data: PDFExportData): void {
         fillColor: [235, 235, 240],
         textColor: [0, 5, 66],
         fontStyle: 'bold',
+        fontSize: 11,
       },
       styles: {
-        fontSize: 9,
-        cellPadding: 4,
+        fontSize: 10,
+        cellPadding: 5,
         textColor: [50, 50, 50],
       },
       columnStyles: {
-        0: { cellWidth: 50, fontStyle: 'bold' },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 95 },
+        0: { cellWidth: 55, fontStyle: 'bold' },
+        1: { cellWidth: 45 },
+        2: { cellWidth: 85 },
       },
     })
   }
 
   // Tips at bottom
   const tipY = doc.lastAutoTable?.finalY || y
-  doc.setFontSize(9)
+  doc.setFontSize(10)
   doc.setTextColor(100, 100, 100)
   doc.setFont('helvetica', 'italic')
   doc.text('Tip: Keep a printed copy of these contacts in your emergency kit.', 15, tipY + 15)
@@ -599,71 +583,69 @@ function generateChecklistPages(doc: jsPDF, data: PDFExportData): void {
   data.checklist.forEach((category) => {
     y = checkNewPage(doc, y, 40)
 
-    // Category header - light background for readability
-    doc.setFillColor(235, 235, 240)
-    doc.roundedRect(15, y, pageWidth - 30, 10, 2, 2, 'F')
-    doc.setDrawColor(180, 180, 190)
-    doc.setLineWidth(0.3)
-    doc.roundedRect(15, y, pageWidth - 30, 10, 2, 2, 'S')
-
-    doc.setFontSize(11)
+    // Category header - no background, just text with underline
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text(category.name, 20, y + 7)
 
-    y += 15
+    // Underline
+    doc.setDrawColor(200, 200, 210)
+    doc.setLineWidth(0.3)
+    doc.line(20, y + 10, pageWidth - 20, y + 10)
 
-    // Items
+    y += 18
+
+    // Items with larger font
     category.items.forEach((item) => {
-      y = checkNewPage(doc, y, 8)
+      y = checkNewPage(doc, y, 10)
 
       // Checkbox
       doc.setDrawColor(150, 150, 150)
       doc.setLineWidth(0.3)
-      doc.rect(20, y - 3, 4, 4)
+      doc.rect(20, y - 3.5, 4.5, 4.5)
 
       if (item.checked) {
         doc.setFillColor(34, 197, 94)
-        doc.rect(20.5, y - 2.5, 3, 3, 'F')
+        doc.rect(20.5, y - 3, 3.5, 3.5, 'F')
       }
 
-      // Item text
-      doc.setFontSize(9)
+      // Item text - larger font
+      doc.setFontSize(10)
       doc.setTextColor(item.checked ? 100 : 50, item.checked ? 100 : 50, item.checked ? 100 : 50)
       doc.setFont('helvetica', 'normal')
-      doc.text(item.name, 28, y)
+      doc.text(item.name, 29, y)
 
       // Last checked date if available
       if (item.checked && item.lastChecked) {
         const date = new Date(item.lastChecked)
         const dateStr = date.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })
-        doc.setFontSize(7)
+        doc.setFontSize(8)
         doc.setTextColor(150, 150, 150)
         doc.text(`(${dateStr})`, pageWidth - 20, y, { align: 'right' })
       }
 
-      y += 6
+      y += 7
     })
 
-    y += 5
+    y += 8
   })
 
-  // Recheck reminder
+  // Recheck reminder - no fill, just border
   y = checkNewPage(doc, y, 30)
-  doc.setFillColor(254, 177, 0, 0.1)
-  doc.roundedRect(15, y, pageWidth - 30, 25, 3, 3, 'F')
   doc.setDrawColor(254, 177, 0)
-  doc.roundedRect(15, y, pageWidth - 30, 25, 3, 3, 'S')
+  doc.setLineWidth(1)
+  doc.roundedRect(15, y, pageWidth - 30, 28, 3, 3, 'S')
 
-  doc.setFontSize(10)
+  doc.setFontSize(11)
   doc.setTextColor(200, 150, 0)
   doc.setFont('helvetica', 'bold')
-  doc.text('REMINDER', 20, y + 10)
+  doc.text('REMINDER', 20, y + 12)
 
-  doc.setFontSize(9)
+  doc.setFontSize(10)
   doc.setTextColor(100, 100, 100)
   doc.setFont('helvetica', 'normal')
-  doc.text('Check perishable items (water, food, batteries, medications) every 3 months.', 20, y + 18)
+  doc.text('Check perishable items (water, food, batteries, medications) every 3 months.', 20, y + 22)
 }
 
 // Skill and disability label lookups
@@ -715,79 +697,79 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
 
   const profile = data.userProfile
 
-  // Personal Details section
-  doc.setFillColor(240, 240, 245)
-  doc.roundedRect(15, y, pageWidth - 30, 50, 3, 3, 'F')
+  // Personal Details section - no background fill, just border
+  doc.setDrawColor(200, 200, 210)
+  doc.setLineWidth(0.5)
+  doc.roundedRect(15, y, pageWidth - 30, 55, 3, 3, 'S')
 
-  doc.setFontSize(11)
+  doc.setFontSize(12)
   doc.setTextColor(0, 5, 66)
   doc.setFont('helvetica', 'bold')
   doc.text('Personal Details', 20, y + 10)
 
-  doc.setFontSize(9)
+  doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(60, 60, 60)
 
-  let detailY = y + 18
+  let detailY = y + 20
   if (profile.full_name) {
     doc.text(`Name: ${profile.full_name}`, 25, detailY)
-    detailY += 6
+    detailY += 7
   }
   if (profile.address) {
     doc.text(`Address: ${profile.address}`, 25, detailY)
-    detailY += 6
+    detailY += 7
   }
   if (profile.mobile_number || profile.phone) {
     doc.text(`Phone: ${profile.mobile_number || profile.phone}`, 25, detailY)
-    detailY += 6
+    detailY += 7
   }
   if (profile.secondary_number) {
     doc.text(`Secondary: ${profile.secondary_number}`, 25, detailY)
-    detailY += 6
+    detailY += 7
   }
   if (profile.email) {
     doc.text(`Email: ${profile.email}`, 25, detailY)
   }
 
-  y += 58
+  y += 62
 
   // Personal Emergency Contacts
   if (profile.emergency_contacts && profile.emergency_contacts.length > 0) {
+    // 18px spacing above heading (approximately 6.35mm)
+    y += 6
     y = checkNewPage(doc, y, 50)
 
-    doc.setFillColor(239, 68, 68)
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 0.1 }))
-    doc.roundedRect(15, y, pageWidth - 30, 8 + profile.emergency_contacts.length * 25, 3, 3, 'F')
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 1 }))
-
+    // No background fill, just red border
     doc.setDrawColor(239, 68, 68)
-    doc.setLineWidth(0.5)
-    doc.roundedRect(15, y, pageWidth - 30, 8 + profile.emergency_contacts.length * 25, 3, 3, 'S')
+    doc.setLineWidth(0.8)
+    doc.roundedRect(15, y, pageWidth - 30, 12 + profile.emergency_contacts.length * 22, 3, 3, 'S')
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(239, 68, 68)
     doc.setFont('helvetica', 'bold')
-    doc.text('My Emergency Contacts', 20, y + 8)
+    doc.text('My Emergency Contacts', 20, y + 10)
 
-    y += 15
+    y += 18
     profile.emergency_contacts.forEach((contact) => {
-      doc.setFontSize(10)
+      doc.setFontSize(11)
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
       doc.text(contact.name, 25, y)
 
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(60, 60, 60)
-      doc.text(contact.phone, 25, y + 6)
+      // Add proper spacing between name and phone
+      doc.text(contact.phone, 25, y + 7)
 
       const relationshipLabel = RELATIONSHIP_LABELS[contact.relationship] || contact.relationship
       doc.setTextColor(120, 120, 120)
-      doc.text(`(${relationshipLabel})`, 25 + doc.getTextWidth(contact.phone) + 5, y + 6)
+      doc.text(`  (${relationshipLabel})`, 25 + doc.getTextWidth(contact.phone), y + 7)
 
-      y += 20
+      y += 18
     })
-    y += 5
+    y += 8
   }
 
   // Insurance Details
@@ -797,13 +779,15 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
     (profile.medical_insurance?.provider)
 
   if (hasInsurance) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 80)
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Insurance Information', 20, y)
-    y += 8
+    y += 10
 
     const insuranceTypes = [
       { key: 'home_insurance', label: 'Home Insurance', icon: 'home' },
@@ -814,99 +798,102 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
     insuranceTypes.forEach((ins) => {
       const insurance = profile[ins.key as keyof typeof profile] as InsuranceDetails | undefined
       if (insurance?.provider) {
-        y = checkNewPage(doc, y, 25)
+        y = checkNewPage(doc, y, 28)
 
-        doc.setFillColor(248, 248, 250)
-        doc.roundedRect(20, y, pageWidth - 40, 22, 2, 2, 'F')
+        // No background, just border
+        doc.setDrawColor(200, 200, 210)
+        doc.setLineWidth(0.3)
+        doc.roundedRect(20, y, pageWidth - 40, 24, 2, 2, 'S')
 
-        doc.setFontSize(9)
+        doc.setFontSize(10)
         doc.setTextColor(0, 5, 66)
         doc.setFont('helvetica', 'bold')
-        doc.text(ins.label, 25, y + 6)
+        doc.text(ins.label, 25, y + 7)
 
         doc.setFont('helvetica', 'normal')
         doc.setTextColor(60, 60, 60)
-        doc.text(`Provider: ${insurance.provider}`, 25, y + 12)
+        doc.text(`Provider: ${insurance.provider}`, 25, y + 14)
 
         if (insurance.policy_number) {
-          doc.text(`Policy: ${insurance.policy_number}`, 90, y + 12)
+          doc.text(`Policy: ${insurance.policy_number}`, 95, y + 14)
         }
         if (insurance.contact_phone) {
-          doc.text(`Claims: ${insurance.contact_phone}`, 25, y + 18)
+          doc.text(`Claims: ${insurance.contact_phone}`, 25, y + 21)
         }
 
-        y += 26
+        y += 28
       }
     })
   }
 
   // Utility Companies
   if (profile.utility_companies && profile.utility_companies.length > 0) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 60)
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Utility Providers', 20, y)
-    y += 8
+    y += 10
 
     profile.utility_companies.forEach((utility) => {
-      y = checkNewPage(doc, y, 28)
+      y = checkNewPage(doc, y, 30)
 
-      doc.setFillColor(248, 248, 250)
-      doc.roundedRect(20, y, pageWidth - 40, 25, 2, 2, 'F')
+      // No background, just border
+      doc.setDrawColor(200, 200, 210)
+      doc.setLineWidth(0.3)
+      doc.roundedRect(20, y, pageWidth - 40, 27, 2, 2, 'S')
 
       // Utility type label
       const typeLabel = UTILITY_TYPE_LABELS[utility.type] || utility.type
-      doc.setFontSize(9)
+      doc.setFontSize(10)
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
-      doc.text(typeLabel, 25, y + 6)
+      doc.text(typeLabel, 25, y + 7)
 
       // Provider name
       doc.setFont('helvetica', 'normal')
       doc.setTextColor(60, 60, 60)
-      doc.text(`Provider: ${utility.provider}`, 25, y + 12)
+      doc.text(`Provider: ${utility.provider}`, 25, y + 14)
 
       // Account number (if available)
       if (utility.account_number) {
-        doc.text(`Account: ${utility.account_number}`, 100, y + 12)
+        doc.text(`Account: ${utility.account_number}`, 100, y + 14)
       }
 
       // Phone (if available)
       if (utility.phone) {
-        doc.text(`Phone: ${utility.phone}`, 25, y + 18)
+        doc.text(`Phone: ${utility.phone}`, 25, y + 21)
       }
 
       // Website (if available)
       if (utility.website) {
-        doc.text(`Web: ${utility.website}`, utility.phone ? 100 : 25, y + 18)
+        doc.text(`Web: ${utility.website}`, utility.phone ? 100 : 25, y + 21)
       }
 
-      y += 29
+      y += 31
     })
   }
 
   // Skills
   if (profile.skills && profile.skills.length > 0) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 40)
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Skills & Qualifications', 20, y)
-    y += 8
+    y += 10
 
-    doc.setFillColor(34, 197, 94)
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 0.1 }))
-    doc.roundedRect(20, y, pageWidth - 40, 6 + Math.ceil(profile.skills.length / 2) * 8, 2, 2, 'F')
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 1 }))
-
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'normal')
 
-    let skillY = y + 6
+    let skillY = y
     profile.skills.forEach((skill, idx) => {
       const label = SKILL_LABELS[skill] || skill
       const col = idx % 2
@@ -920,29 +907,26 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
       doc.text(`• ${label}`, xPos, skillY)
     })
 
-    y = skillY + 12
+    y = skillY + 14
   }
 
   // Disabilities/Special Needs
   if (profile.disabilities && profile.disabilities.length > 0) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 40)
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Special Needs & Considerations', 20, y)
-    y += 8
+    y += 10
 
-    doc.setFillColor(249, 115, 22)
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 0.1 }))
-    doc.roundedRect(20, y, pageWidth - 40, 6 + profile.disabilities.length * 8, 2, 2, 'F')
-    doc.setGState(new (doc.GState as unknown as new (options: { opacity: number }) => unknown)({ opacity: 1 }))
-
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'normal')
 
-    let disY = y + 6
+    let disY = y
     profile.disabilities.forEach((disability) => {
       disY = checkNewPage(doc, disY, 10)
       const label = DISABILITY_LABELS[disability] || disability
@@ -950,21 +934,23 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
       disY += 8
     })
 
-    y = disY + 8
+    y = disY + 10
   }
 
   // Preparedness
   const hasPreparedness = profile.has_backup_power || profile.has_backup_water || profile.has_food_supply
   if (hasPreparedness) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 40)
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Emergency Preparedness', 20, y)
-    y += 8
+    y += 10
 
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(60, 60, 60)
     doc.setFont('helvetica', 'normal')
 
@@ -972,44 +958,47 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
       doc.setTextColor(34, 197, 94)
       doc.text('✓', 25, y)
       doc.setTextColor(60, 60, 60)
-      doc.text('Emergency backup power available', 32, y)
-      y += 7
+      doc.text('Emergency backup power available', 33, y)
+      y += 8
     }
     if (profile.has_backup_water) {
       doc.setTextColor(34, 197, 94)
       doc.text('✓', 25, y)
       doc.setTextColor(60, 60, 60)
-      doc.text('Backup water supply available', 32, y)
-      y += 7
+      doc.text('Backup water supply available', 33, y)
+      y += 8
     }
     if (profile.has_food_supply) {
       doc.setTextColor(34, 197, 94)
       doc.text('✓', 25, y)
       doc.setTextColor(60, 60, 60)
-      doc.text('Food supply for 5+ days', 32, y)
-      y += 7
+      doc.text('Food supply for 5+ days', 33, y)
+      y += 8
     }
   }
 
   // General comments
   if (profile.general_comments) {
+    // 18px spacing above heading
+    y += 6
     y = checkNewPage(doc, y, 40)
-    y += 5
 
-    doc.setFontSize(11)
+    doc.setFontSize(12)
     doc.setTextColor(0, 5, 66)
     doc.setFont('helvetica', 'bold')
     doc.text('Additional Notes', 20, y)
-    y += 8
+    y += 10
 
-    doc.setFillColor(248, 248, 250)
+    // No background, just border
     const commentLines = doc.splitTextToSize(profile.general_comments, pageWidth - 50)
-    doc.roundedRect(20, y, pageWidth - 40, 8 + commentLines.length * 5, 2, 2, 'F')
+    doc.setDrawColor(200, 200, 210)
+    doc.setLineWidth(0.3)
+    doc.roundedRect(20, y, pageWidth - 40, 10 + commentLines.length * 5, 2, 2, 'S')
 
-    doc.setFontSize(9)
+    doc.setFontSize(10)
     doc.setTextColor(80, 80, 80)
     doc.setFont('helvetica', 'normal')
-    doc.text(commentLines, 25, y + 6)
+    doc.text(commentLines, 25, y + 7)
   }
 }
 
