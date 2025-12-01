@@ -65,18 +65,26 @@ function isBannerDismissedValid(): boolean {
 
 // Helper to save push subscription to server
 async function savePushSubscription(userId: string): Promise<boolean> {
+  console.log('[NotificationContext] savePushSubscription called for user:', userId)
+
   if (!isPushSupported()) {
     console.log('[NotificationContext] Push not supported, skipping subscription save')
     return false
   }
 
   try {
+    console.log('[NotificationContext] Waiting for service worker ready...')
     const registration = await navigator.serviceWorker.ready
+    console.log('[NotificationContext] Service worker ready, checking existing subscription...')
+
     let subscription = await registration.pushManager.getSubscription()
+    console.log('[NotificationContext] Existing subscription:', subscription ? 'found' : 'none')
 
     // If no subscription exists, create one
     if (!subscription) {
       const vapidPublicKey = process.env.NEXT_PUBLIC_WEB_PUSH_PUBLIC_KEY
+      console.log('[NotificationContext] VAPID key configured:', !!vapidPublicKey && vapidPublicKey !== 'your_vapid_public_key')
+
       if (!vapidPublicKey || vapidPublicKey === 'your_vapid_public_key') {
         console.warn('[NotificationContext] VAPID key not configured')
         return false
@@ -91,6 +99,7 @@ async function savePushSubscription(userId: string): Promise<boolean> {
         applicationServerKey[i] = rawData.charCodeAt(i)
       }
 
+      console.log('[NotificationContext] Creating new push subscription...')
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: applicationServerKey.buffer as ArrayBuffer,
@@ -100,12 +109,19 @@ async function savePushSubscription(userId: string): Promise<boolean> {
 
     // Get subscription keys
     const subscriptionJson = subscription.toJSON()
+    console.log('[NotificationContext] Subscription JSON:', {
+      hasEndpoint: !!subscriptionJson.endpoint,
+      hasP256dh: !!subscriptionJson.keys?.p256dh,
+      hasAuth: !!subscriptionJson.keys?.auth,
+    })
+
     if (!subscriptionJson.endpoint || !subscriptionJson.keys?.p256dh || !subscriptionJson.keys?.auth) {
       console.error('[NotificationContext] Invalid subscription data')
       return false
     }
 
     // Save to server
+    console.log('[NotificationContext] Saving subscription to server...')
     const response = await fetch('/api/push-subscription', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -121,8 +137,11 @@ async function savePushSubscription(userId: string): Promise<boolean> {
       }),
     })
 
+    console.log('[NotificationContext] Server response status:', response.status)
+
     if (!response.ok) {
-      console.error('[NotificationContext] Failed to save subscription to server')
+      const errorData = await response.json().catch(() => ({}))
+      console.error('[NotificationContext] Failed to save subscription to server:', errorData)
       return false
     }
 

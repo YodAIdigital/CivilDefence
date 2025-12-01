@@ -17,11 +17,21 @@ interface PushSubscriptionRequest {
  * Save a user's push subscription to the database
  */
 export async function POST(request: NextRequest) {
+  console.log('[PushSubscription] POST request received')
+
   try {
     const body: PushSubscriptionRequest = await request.json()
     const { userId, subscription } = body
 
+    console.log('[PushSubscription] Request data:', {
+      userId,
+      hasEndpoint: !!subscription?.endpoint,
+      hasP256dh: !!subscription?.keys?.p256dh,
+      hasAuth: !!subscription?.keys?.auth,
+    })
+
     if (!userId || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      console.error('[PushSubscription] Missing required fields')
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -31,7 +41,8 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient()
 
     // Upsert the subscription (update if endpoint exists, insert if not)
-    const { error } = await supabase
+    console.log('[PushSubscription] Attempting to save to database...')
+    const { data, error } = await supabase
       .from('push_subscriptions')
       .upsert(
         {
@@ -45,19 +56,23 @@ export async function POST(request: NextRequest) {
           onConflict: 'user_id,endpoint',
         }
       )
+      .select()
 
     if (error) {
-      console.error('[PushSubscription] Failed to save subscription:', error)
+      console.error('[PushSubscription] Database error:', error)
+      console.error('[PushSubscription] Error code:', error.code)
+      console.error('[PushSubscription] Error message:', error.message)
+      console.error('[PushSubscription] Error details:', error.details)
       return NextResponse.json(
-        { error: 'Failed to save subscription' },
+        { error: `Failed to save subscription: ${error.message}` },
         { status: 500 }
       )
     }
 
-    console.log('[PushSubscription] Saved subscription for user:', userId)
+    console.log('[PushSubscription] Saved successfully:', data)
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('[PushSubscription] Error:', error)
+    console.error('[PushSubscription] Unexpected error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
