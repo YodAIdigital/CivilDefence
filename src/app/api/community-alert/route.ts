@@ -238,20 +238,21 @@ export async function POST(request: NextRequest) {
       user_id: userId,
     }))
 
-    // Try to insert alert recipients (table might not exist)
-    try {
-      const supabaseAny = supabase as unknown as {
-        from: (table: string) => {
-          insert: (data: unknown[]) => Promise<{ error: Error | null }>
-        }
-      }
-      await supabaseAny
-        .from('alert_recipients')
-        .insert(recipientEntries)
-    } catch {
-      // Table might not exist yet - alert will still be visible via community_id
-      console.log('alert_recipients table not available, using community-wide delivery')
+    // Insert alert recipients for targeted delivery
+    console.log('=== ALERT RECIPIENTS INSERT DEBUG ===')
+    console.log('Inserting recipient entries:', recipientEntries.length)
+
+    const { error: recipientsError } = await supabase
+      .from('alert_recipients')
+      .insert(recipientEntries)
+
+    if (recipientsError) {
+      console.error('Failed to insert alert recipients:', recipientsError)
+      // Don't fail the whole request, but log the error
+    } else {
+      console.log('Successfully inserted', recipientEntries.length, 'alert recipients')
     }
+    console.log('=== END ALERT RECIPIENTS INSERT DEBUG ===')
 
     // Fetch recipient profiles for email and SMS
     const { data: profiles, error: profilesError } = await supabase
