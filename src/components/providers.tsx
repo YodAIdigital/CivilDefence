@@ -4,18 +4,14 @@ import { AuthProvider } from '@/contexts/auth-context'
 import { CommunityProvider } from '@/contexts/community-context'
 import { NotificationProvider } from '@/contexts/notification-context'
 import { NotificationPermissionBanner } from '@/components/notifications/notification-permission-banner'
-import { type ReactNode, useState, useEffect } from 'react'
+import { type ReactNode, useEffect } from 'react'
 
 interface ProvidersProps {
   children: ReactNode
 }
 
 export function Providers({ children }: ProvidersProps) {
-  const [mounted, setMounted] = useState(false)
-
   useEffect(() => {
-    setMounted(true)
-
     // Register service worker for PWA
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
@@ -26,11 +22,7 @@ export function Providers({ children }: ProvidersProps) {
     }
   }, [])
 
-  // Render children without providers during SSR to avoid context issues
-  if (!mounted) {
-    return <>{children}</>
-  }
-
+  // Always wrap children in providers to ensure context is available during hydration
   return (
     <AuthProvider>
       <CommunityProvider>

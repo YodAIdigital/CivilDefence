@@ -58,7 +58,8 @@ export function Logo({ className, size = 'md', showText = true }: LogoProps) {
       {showText && (
         <span className={cn('font-bold tracking-tight', config.textSize)}>
           <span className="text-foreground font-normal">Civil</span>
-          <span className="text-[#FEB100] font-bold">DefencePro</span>
+          <span className="text-[#FEB100] font-bold">Defence</span>
+          <span className="text-foreground font-normal">Pro</span>
         </span>
       )}
     </div>

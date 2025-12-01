@@ -130,23 +130,49 @@ export async function POST(request: NextRequest) {
     // Determine recipients based on group
     let recipientUserIds: string[] = []
 
+    console.log('=== RECIPIENT FILTERING DEBUG ===')
+    console.log('recipientGroup:', recipientGroup)
+    console.log('specificMemberIds:', specificMemberIds)
+
     if (recipientGroup === 'specific' && specificMemberIds && specificMemberIds.length > 0) {
       recipientUserIds = specificMemberIds
+      console.log('Using specific member IDs:', recipientUserIds)
     } else {
       // Build query based on recipient group
-      let query = supabase
-        .from('community_members')
-        .select('user_id, role')
-        .eq('community_id', communityId)
+      let members: { user_id: string; role: string }[] | null = null
+      let membersError: Error | null = null
 
       if (recipientGroup === 'admin') {
-        query = query.in('role', ['admin', 'super_admin'])
+        console.log('Filtering for admin roles only')
+        const result = await supabase
+          .from('community_members')
+          .select('user_id, role')
+          .eq('community_id', communityId)
+          .in('role', ['admin', 'super_admin'])
+        members = result.data
+        membersError = result.error
       } else if (recipientGroup === 'team') {
-        query = query.in('role', ['admin', 'super_admin', 'team_member'])
+        console.log('Filtering for team roles (admin + team_member)')
+        const result = await supabase
+          .from('community_members')
+          .select('user_id, role')
+          .eq('community_id', communityId)
+          .in('role', ['admin', 'super_admin', 'team_member'])
+        members = result.data
+        membersError = result.error
+      } else {
+        // 'members' gets all members (no additional filter)
+        console.log('Getting all members (no role filter)')
+        const result = await supabase
+          .from('community_members')
+          .select('user_id, role')
+          .eq('community_id', communityId)
+        members = result.data
+        membersError = result.error
       }
-      // 'members' gets all members (no additional filter)
 
-      const { data: members, error: membersError } = await query
+      console.log('Query result - members:', members)
+      console.log('Query result - error:', membersError)
 
       if (membersError) {
         return NextResponse.json(
@@ -156,7 +182,9 @@ export async function POST(request: NextRequest) {
       }
 
       recipientUserIds = members?.map(m => m.user_id) || []
+      console.log('Final recipientUserIds:', recipientUserIds)
     }
+    console.log('=== END RECIPIENT FILTERING DEBUG ===')
 
     if (recipientUserIds.length === 0) {
       return NextResponse.json(

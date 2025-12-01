@@ -206,38 +206,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
             )
           })}
 
-          {/* Community Nav Item - Link to community list for all users */}
-          {(() => {
-            // Check if we're on the community list page (not manage page)
-            const isOnManagePage = activeCommunity && pathname === `/community/${activeCommunity.id}/manage`
-            const isCommunityActive = (pathname?.startsWith('/community') ?? false) && !isOnManagePage
-
-            return (
-              <Link
-                href="/community"
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isCommunityActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                title={isCollapsed ? 'Community' : undefined}
-              >
-                <span className={`material-icons-outlined text-xl ${isCommunityActive ? '' : 'opacity-70'}`}>
-                  groups
-                </span>
-                {!isCollapsed && (
-                  <>
-                    Community
-                    {isCommunityActive && (
-                      <span className="material-icons ml-auto text-lg">arrow_forward</span>
-                    )}
-                  </>
-                )}
-              </Link>
-            )
-          })()}
-
-          {/* Manage Community - Only visible to community admins */}
+          {/* Community - Only visible to community admins */}
           {activeCommunity && isActiveCommunityAdmin && (() => {
             const manageHref = `/community/${activeCommunity.id}/manage`
             const isManageActive = pathname === manageHref
@@ -250,14 +219,14 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                 } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                title={isCollapsed ? 'Manage Community' : undefined}
+                title={isCollapsed ? 'Community' : undefined}
               >
                 <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
-                  settings
+                  groups
                 </span>
                 {!isCollapsed && (
                   <>
-                    Manage Community
+                    Community
                     {isManageActive && (
                       <span className="material-icons ml-auto text-lg">arrow_forward</span>
                     )}

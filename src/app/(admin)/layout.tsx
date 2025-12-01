@@ -90,7 +90,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <div className="flex items-center gap-2">
             <Link href="/admin/dashboard" className="flex items-center gap-2">
               <Shield className="h-6 w-6" />
-              <span className="text-xl font-bold">CivilDefencePro</span>
+              <span className="text-xl tracking-tight">
+                <span className="font-normal">Civil</span>
+                <span className="font-bold text-[#FEB100]">Defence</span>
+                <span className="font-normal">Pro</span>
+              </span>
             </Link>
             <span className="rounded-md bg-white/20 px-2 py-1 text-xs font-medium">
               {isSuperAdmin ? 'Super Admin' : 'Admin'}

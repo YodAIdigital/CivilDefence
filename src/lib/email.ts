@@ -69,13 +69,10 @@ export async function sendEmail({ to, subject, html, text }: EmailOptions): Prom
 }
 
 // Email templates
-// SVG shield logo as base64 data URI for better email client compatibility
-const getShieldLogoDataUri = () => {
-  const shieldLogoSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40"><path fill="#000542" stroke="#000542" stroke-width="1" d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path fill="#FEB100" d="M12 20s6-3.2 6-8V6.5l-6-2.25L6 6.5V12c0 4.8 6 8 6 8"/></svg>`
-  // Use base64 encoding for better email client support
-  const base64 = Buffer.from(shieldLogoSvg).toString('base64')
-  return `data:image/svg+xml;base64,${base64}`
-}
+// Branded header HTML for consistent email styling
+const getEmailHeaderHtml = () => `
+  <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span><span style="font-size: 28px; font-weight: normal; color: #ffffff;">Pro</span>
+`
 
 export function getCommunityInvitationEmail(params: {
   communityName: string
@@ -87,7 +84,6 @@ export function getCommunityInvitationEmail(params: {
   const { communityName, inviterName, role, inviteUrl, expiresAt } = params
 
   const subject = `You've been invited to join ${communityName} on CivilDefencePro`
-  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -105,16 +101,7 @@ export function getCommunityInvitationEmail(params: {
           <!-- Header -->
           <tr>
             <td style="background-color: #000542; padding: 30px; text-align: center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
-                <tr>
-                  <td style="vertical-align: middle; padding-right: 12px;">
-                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
-                  </td>
-                  <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
-                  </td>
-                </tr>
-              </table>
+              ${getEmailHeaderHtml()}
             </td>
           </tr>
 
@@ -183,7 +170,6 @@ export function getWelcomeEmail(params: {
   const { userName, loginUrl } = params
 
   const subject = `Welcome to CivilDefencePro!`
-  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -201,16 +187,7 @@ export function getWelcomeEmail(params: {
           <!-- Header -->
           <tr>
             <td style="background-color: #000542; padding: 30px; text-align: center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
-                <tr>
-                  <td style="vertical-align: middle; padding-right: 12px;">
-                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
-                  </td>
-                  <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
-                  </td>
-                </tr>
-              </table>
+              ${getEmailHeaderHtml()}
             </td>
           </tr>
 
@@ -296,7 +273,6 @@ export function getCommunityAlertEmail(params: {
 
   const config = levelConfig[alertLevel]
   const subject = `[${config.label}] ${title} - ${communityName}`
-  const shieldLogoDataUri = getShieldLogoDataUri()
 
   const html = `
 <!DOCTYPE html>
@@ -314,16 +290,7 @@ export function getCommunityAlertEmail(params: {
           <!-- Header -->
           <tr>
             <td style="background-color: #000542; padding: 30px; text-align: center;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin: 0 auto;">
-                <tr>
-                  <td style="vertical-align: middle; padding-right: 12px;">
-                    <img src="${shieldLogoDataUri}" alt="Shield" width="40" height="40" style="display: block;">
-                  </td>
-                  <td style="vertical-align: middle;">
-                    <span style="font-size: 28px; font-weight: normal; color: #ffffff;">Civil</span><span style="font-size: 28px; font-weight: bold; color: #FEB100;">Defence</span>
-                  </td>
-                </tr>
-              </table>
+              ${getEmailHeaderHtml()}
             </td>
           </tr>
 

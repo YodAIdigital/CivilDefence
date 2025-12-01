@@ -917,17 +917,11 @@ export default function CommunityManagePage() {
           const isLink = 'href' in tab && tab.href
 
           const getIconColor = () => {
-            if (tab.id === 'alerts') return 'text-[#FEB100]'
-            if (tab.id === 'members') return 'text-[#FEB100]'
-            if (tab.id === 'events') return 'text-[#FEB100]'
-            return 'text-green-500'
+            return 'text-[#000542]'
           }
 
           const getIconBg = () => {
-            if (tab.id === 'alerts') return 'bg-[#FEB100]/20'
-            if (tab.id === 'members') return 'bg-[#FEB100]/20'
-            if (tab.id === 'events') return 'bg-[#FEB100]/20'
-            return 'bg-green-500/10'
+            return 'bg-gray-100'
           }
 
           const tabContent = (
