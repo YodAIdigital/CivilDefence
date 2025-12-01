@@ -28,8 +28,8 @@ export async function GET(request: NextRequest) {
   // Use correct base URL - never use requestUrl.origin as it can be 0.0.0.0 in Docker
   const baseUrl = getBaseUrl()
 
-  // Create response that we'll add cookies to
-  const response = NextResponse.redirect(new URL(next, baseUrl))
+  // Track cookies that need to be set
+  const cookiesToSet: { name: string; value: string; options: Record<string, unknown> }[] = []
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,10 +39,8 @@ export async function GET(request: NextRequest) {
         getAll() {
           return cookieStore.getAll()
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options)
-          })
+        setAll(cookies) {
+          cookiesToSet.push(...cookies)
         },
       },
     }
@@ -53,11 +51,20 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (!error) {
+      // Create response and set all cookies
+      const response = NextResponse.redirect(new URL(next, baseUrl))
+      cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+      })
       return response
     }
 
-    console.error('Auth callback error (code exchange):', error)
-    return NextResponse.redirect(new URL('/login?error=auth_callback_error', baseUrl))
+    console.error('Auth callback error (code exchange):', error.message, error)
+    // Include error details in redirect for debugging
+    const errorUrl = new URL('/login', baseUrl)
+    errorUrl.searchParams.set('error', 'auth_callback_error')
+    errorUrl.searchParams.set('error_description', error.message || 'Unknown error')
+    return NextResponse.redirect(errorUrl)
   }
 
   // Handle email confirmation with token_hash
@@ -68,6 +75,11 @@ export async function GET(request: NextRequest) {
     })
 
     if (!error) {
+      // Create response and set all cookies
+      const response = NextResponse.redirect(new URL(next, baseUrl))
+      cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+      })
       return response
     }
 

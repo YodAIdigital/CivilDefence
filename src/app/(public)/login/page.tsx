@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,11 +15,31 @@ import { supabase } from '@/lib/supabase/client'
 import { Logo } from '@/components/custom/logo'
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Check for error in URL params (from auth callback)
+  useEffect(() => {
+    const urlError = searchParams.get('error')
+    const errorDescription = searchParams.get('error_description')
+    if (urlError) {
+      if (errorDescription) {
+        setError(`Authentication failed: ${errorDescription}`)
+      } else if (urlError === 'auth_callback_error') {
+        setError('Authentication failed. Please try again.')
+      } else if (urlError === 'verification_error') {
+        setError('Email verification failed. Please try again.')
+      } else {
+        setError(`Authentication error: ${urlError}`)
+      }
+      // Clear URL params
+      window.history.replaceState({}, '', '/login')
+    }
+  }, [searchParams])
 
   // Listen for auth state changes and redirect on sign in
   useEffect(() => {

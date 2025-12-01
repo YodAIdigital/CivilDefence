@@ -42,9 +42,7 @@ export const supabase: SupabaseClient<Database> = createClient<Database>(
       persistSession: typeof window !== 'undefined',
       detectSessionInUrl: typeof window !== 'undefined',
       storageKey: 'civil-defence-auth',
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      // Explicitly set the flow type and site URL to prevent 0.0.0.0 issues
-      flowType: 'pkce'
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined
     },
     global: {
       headers: {
