@@ -117,7 +117,10 @@ export default function DashboardPage() {
     try {
       // Fetch alerts where user is a specific recipient
       // This respects the recipient_group filtering (admin, team, members, specific)
-      const { data: recipientAlerts } = await supabase
+      console.log('=== DASHBOARD ALERTS DEBUG ===')
+      console.log('Fetching alerts for user:', user.id)
+
+      const { data: recipientAlerts, error: recipientError } = await supabase
         .from('alert_recipients')
         .select(`
           alert_id,
@@ -138,6 +141,12 @@ export default function DashboardPage() {
         .order('created_at', { ascending: false })
         .limit(20)
 
+      console.log('Recipient alerts query result:', {
+        count: recipientAlerts?.length || 0,
+        data: recipientAlerts,
+        error: recipientError?.message
+      })
+
       // Extract alerts from recipients and filter active ones
       let dbAlerts: DBAlert[] = []
 
@@ -145,7 +154,9 @@ export default function DashboardPage() {
         dbAlerts = recipientAlerts
           .map(r => r.alerts as unknown as DBAlert)
           .filter(alert => alert && alert.is_active)
+        console.log('Active alerts after filtering:', dbAlerts.length)
       }
+      console.log('=== END DASHBOARD ALERTS DEBUG ===')
 
       // Filter out dismissed alerts
       const dismissed = getDismissedAlerts()

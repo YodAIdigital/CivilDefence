@@ -58,6 +58,7 @@ export async function sendSms({ to, message }: SmsOptions): Promise<SmsResult> {
       headers: {
         'Authorization': `Basic ${credentials}`,
         'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
       },
       body: body.toString(),
     })
