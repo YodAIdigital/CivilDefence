@@ -42,6 +42,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
   const { communities, activeCommunity, setActiveCommunity, isActiveCommunityAdmin } = useCommunity()
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isCommunityDropdownOpen, setIsCommunityDropdownOpen] = useState(false)
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   // Generate Gravatar URL from email
   const getGravatarUrl = (email: string, size: number = 80) => {
@@ -74,6 +75,11 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
     }
   }, [isAuthenticated, isLoading, router])
 
+  // Close mobile menu when route changes
+  useEffect(() => {
+    setIsMobileMenuOpen(false)
+  }, [pathname])
+
   const handleSignOut = async () => {
     await signOut()
     router.push('/')
@@ -103,9 +109,207 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      {/* Left Sidebar */}
+      {/* Mobile Top Navigation */}
+      <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center justify-between border-b border-border bg-card px-4 md:hidden">
+        <Link href="/dashboard">
+          <Logo size="sm" />
+        </Link>
+        <button
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-foreground"
+          aria-label="Toggle menu"
+        >
+          <span className="material-icons text-2xl">
+            {isMobileMenuOpen ? 'close' : 'menu'}
+          </span>
+        </button>
+      </header>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 md:hidden"
+          onClick={() => setIsMobileMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Slide-down Menu */}
+      <div
+        className={`fixed left-0 right-0 top-14 z-40 max-h-[calc(100vh-3.5rem)] overflow-y-auto border-b border-border bg-card transition-transform duration-300 md:hidden ${
+          isMobileMenuOpen ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
+        {/* Community Selector */}
+        {communities.length > 0 && (
+          <div className="border-b border-border p-4">
+            <div className="relative">
+              <button
+                onClick={() => setIsCommunityDropdownOpen(!isCommunityDropdownOpen)}
+                className="flex w-full items-center gap-2 rounded-lg border border-border bg-background p-2.5 text-sm hover:bg-muted"
+              >
+                <span className="material-icons text-xl text-[#000542]">groups</span>
+                <div className="flex-1 overflow-hidden text-left">
+                  <p className="truncate font-medium">{activeCommunity?.name || 'Select Community'}</p>
+                </div>
+                <span className="material-icons text-lg text-muted-foreground">
+                  {isCommunityDropdownOpen ? 'expand_less' : 'expand_more'}
+                </span>
+              </button>
+
+              {/* Dropdown */}
+              {isCommunityDropdownOpen && (
+                <div className="absolute left-0 right-0 top-full z-50 mt-1 rounded-lg border border-border bg-card py-1 shadow-lg">
+                  {communities.map((community) => (
+                    <button
+                      key={community.id}
+                      onClick={() => handleCommunitySelect(community)}
+                      className={`flex w-full items-center px-3 py-2 text-sm hover:bg-muted ${
+                        activeCommunity?.id === community.id ? 'bg-primary/10 text-primary' : ''
+                      }`}
+                    >
+                      <span className="truncate text-left">{community.name}</span>
+                    </button>
+                  ))}
+                  <div className="border-t border-border mt-1 pt-1">
+                    <Link
+                      href="/community"
+                      onClick={() => {
+                        setIsCommunityDropdownOpen(false)
+                        setIsMobileMenuOpen(false)
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      <span className="material-icons text-lg">add</span>
+                      <span>Community</span>
+                    </Link>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Navigation Items */}
+        <nav className="p-4 space-y-1">
+          {navItems.map((item) => {
+            const isActive = pathname === item.href
+            return (
+              <Link
+                key={item.href}
+                href={item.href as Route}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <span className={`material-icons-outlined text-xl ${isActive ? '' : 'opacity-70'}`}>
+                  {item.icon}
+                </span>
+                {item.label}
+              </Link>
+            )
+          })}
+
+          {/* Community Manage Link - Only visible to community admins */}
+          {activeCommunity && isActiveCommunityAdmin && (() => {
+            const manageHref = `/community/${activeCommunity.id}/manage`
+            const isManageActive = pathname === manageHref
+
+            return (
+              <Link
+                href={manageHref as Route}
+                onClick={() => setIsMobileMenuOpen(false)}
+                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                  isManageActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                }`}
+              >
+                <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
+                  groups
+                </span>
+                Community
+              </Link>
+            )
+          })()}
+
+          {/* Admin Navigation - Only visible to super admins */}
+          {profile?.role === 'super_admin' && (
+            <>
+              <div className="mt-4 mb-2 px-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Admin
+                </p>
+              </div>
+              {adminNavItems.map((item) => {
+                const isActive = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href as Route}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? 'bg-[#FEB100] text-white'
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                    }`}
+                  >
+                    <span className={`material-icons-outlined text-xl ${isActive ? '' : 'opacity-70'}`}>
+                      {item.icon}
+                    </span>
+                    {item.label}
+                  </Link>
+                )
+              })}
+            </>
+          )}
+        </nav>
+
+        {/* Mobile User Section */}
+        <div className="border-t border-border p-4">
+          <Link
+            href="/profile"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted transition-colors"
+          >
+            <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent">
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={profile?.full_name || 'User'}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none'
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                  }}
+                />
+              ) : null}
+              <div className={`flex h-full w-full items-center justify-center text-sm font-medium text-white ${avatarUrl ? 'hidden' : ''}`}>
+                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <p className="truncate text-sm font-medium">{profile?.full_name || 'User'}</p>
+              <p className="truncate text-xs text-muted-foreground capitalize">
+                {profile?.role || 'member'}
+              </p>
+            </div>
+          </Link>
+          <button
+            onClick={handleSignOut}
+            className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm text-muted-foreground hover:bg-muted hover:text-destructive"
+          >
+            <span className="material-icons-outlined text-lg">logout</span>
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      {/* Left Sidebar - Hidden on mobile */}
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border bg-card transition-all duration-300 ${
+        className={`fixed left-0 top-0 z-40 hidden h-screen flex-col border-r border-border bg-card transition-all duration-300 md:flex ${
           isCollapsed ? 'w-16' : 'w-60'
         }`}
       >
@@ -336,11 +540,11 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
       {/* Main Content */}
       <div
         className={`flex flex-1 flex-col transition-all duration-300 ${
-          isCollapsed ? 'ml-16' : 'ml-60'
+          isCollapsed ? 'md:ml-16' : 'md:ml-60'
         }`}
       >
-        {/* Page Content */}
-        <main className="flex-1 p-6">{children}</main>
+        {/* Page Content - pt-14 on mobile for fixed header, p-4 on mobile, p-6 on desktop */}
+        <main className="flex-1 pt-14 px-4 pb-4 md:pt-0 md:p-6 w-full max-w-full overflow-x-hidden">{children}</main>
       </div>
     </div>
   )

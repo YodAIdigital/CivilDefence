@@ -63,16 +63,20 @@ export async function requestNotificationPermission(): Promise<NotificationPermi
  */
 export async function showNotification(options: NotificationOptions): Promise<boolean> {
   const permission = getNotificationPermission()
+  console.log('[Notifications] showNotification called, permission:', permission)
 
   if (permission !== 'granted') {
-    console.warn('Notification permission not granted')
+    console.warn('[Notifications] Permission not granted, cannot show notification')
     return false
   }
 
   try {
     // Try to use service worker for notification (works when app is in background)
     if ('serviceWorker' in navigator) {
+      console.log('[Notifications] Using service worker for notification...')
       const registration = await navigator.serviceWorker.ready
+      console.log('[Notifications] Service worker ready, showing notification:', options.title)
+
       // Build browser notification options (separate from our NotificationOptions interface)
       const browserOptions: globalThis.NotificationOptions = {
         body: options.body,
@@ -89,10 +93,12 @@ export async function showNotification(options: NotificationOptions): Promise<bo
         browserOptions.data = options.data
       }
       await registration.showNotification(options.title, browserOptions)
+      console.log('[Notifications] Notification shown successfully via service worker')
       return true
     }
 
     // Fallback to basic Notification API
+    console.log('[Notifications] Using fallback Notification API...')
     const fallbackOptions: globalThis.NotificationOptions = {
       body: options.body,
       icon: options.icon || '/icon-192.svg',
@@ -105,9 +111,10 @@ export async function showNotification(options: NotificationOptions): Promise<bo
       fallbackOptions.data = options.data
     }
     new Notification(options.title, fallbackOptions)
+    console.log('[Notifications] Notification shown successfully via fallback API')
     return true
   } catch (error) {
-    console.error('Error showing notification:', error)
+    console.error('[Notifications] Error showing notification:', error)
     return false
   }
 }
@@ -147,22 +154,30 @@ export async function showAlertNotification(
  */
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) {
-    console.warn('Service Worker not supported')
+    console.warn('[Notifications] Service Worker not supported')
     return null
   }
 
   try {
+    console.log('[Notifications] Attempting to register service worker...')
     const registration = await navigator.serviceWorker.register('/sw.js', {
       scope: '/',
     })
 
-    // Wait for the service worker to be ready
-    await navigator.serviceWorker.ready
+    console.log('[Notifications] Service worker registration returned:', registration.scope)
 
-    console.log('Service Worker registered successfully')
+    // Wait for the service worker to be ready
+    const ready = await navigator.serviceWorker.ready
+    console.log('[Notifications] Service Worker is ready:', ready.scope)
+
     return registration
   } catch (error) {
-    console.error('Service Worker registration failed:', error)
+    console.error('[Notifications] Service Worker registration failed:', error)
+    // Try to provide more specific error info
+    if (error instanceof Error) {
+      console.error('[Notifications] Error message:', error.message)
+      console.error('[Notifications] Error name:', error.name)
+    }
     return null
   }
 }
