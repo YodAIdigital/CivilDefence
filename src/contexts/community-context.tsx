@@ -196,6 +196,17 @@ export function CommunityProvider({ children }: CommunityProviderProps) {
 export function useCommunity() {
   const context = useContext(CommunityContext)
   if (context === undefined) {
+    // During SSR or before hydration, return safe defaults
+    if (typeof window === 'undefined') {
+      return {
+        communities: [],
+        activeCommunity: null,
+        setActiveCommunity: () => {},
+        isActiveCommunityAdmin: false,
+        refreshCommunities: async () => {},
+        getRoleForCommunity: () => null
+      }
+    }
     throw new Error('useCommunity must be used within a CommunityProvider')
   }
   return context
