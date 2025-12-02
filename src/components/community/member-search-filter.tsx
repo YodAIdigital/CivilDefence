@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { Search, Filter, X, ChevronDown, User, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Profile, CommunityRole, ProfileExtended, CommunityGroup } from '@/types/database'
@@ -150,7 +150,7 @@ export function MemberSearchFilter({
   }, [members, filters, groupMembers])
 
   // Update parent component when filtered members change
-  useMemo(() => {
+  useEffect(() => {
     onFilteredMembersChange(filteredMembers)
   }, [filteredMembers, onFilteredMembersChange])
 
