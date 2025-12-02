@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { Search, Filter, X, ChevronDown, User } from 'lucide-react'
+import { Search, Filter, X, ChevronDown, User, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { Profile, CommunityRole, ProfileExtended } from '@/types/database'
+import type { Profile, CommunityRole, ProfileExtended, CommunityGroup } from '@/types/database'
 import {
   SKILL_OPTIONS,
   DISABILITY_OPTIONS,
@@ -20,14 +20,22 @@ export interface CommunityMemberWithProfile {
   profile: Profile | null
 }
 
+// Group member info for filtering
+export interface GroupMemberInfo {
+  group_id: string
+  user_id: string
+}
+
 interface MemberSearchFilterProps {
   members: CommunityMemberWithProfile[]
   onFilteredMembersChange: (members: CommunityMemberWithProfile[]) => void
   className?: string
   inviteButton?: React.ReactNode
+  groups?: CommunityGroup[]
+  groupMembers?: GroupMemberInfo[]
 }
 
-type FilterCategory = 'skills' | 'disabilities' | 'equipment' | 'roles'
+type FilterCategory = 'skills' | 'disabilities' | 'equipment' | 'roles' | 'groups'
 
 interface ActiveFilters {
   searchQuery: string
@@ -35,6 +43,7 @@ interface ActiveFilters {
   disabilities: string[]
   equipment: string[]
   roles: CommunityRole[]
+  groups: string[]
 }
 
 const initialFilters: ActiveFilters = {
@@ -43,6 +52,7 @@ const initialFilters: ActiveFilters = {
   disabilities: [],
   equipment: [],
   roles: [],
+  groups: [],
 }
 
 export function MemberSearchFilter({
@@ -50,6 +60,8 @@ export function MemberSearchFilter({
   onFilteredMembersChange,
   className = '',
   inviteButton,
+  groups = [],
+  groupMembers = [],
 }: MemberSearchFilterProps) {
   const [filters, setFilters] = useState<ActiveFilters>(initialFilters)
   const [showFilters, setShowFilters] = useState(false)
@@ -125,8 +137,17 @@ export function MemberSearchFilter({
       })
     }
 
+    // Filter by groups
+    if (filters.groups.length > 0) {
+      result = result.filter((member) => {
+        return filters.groups.some((groupId) =>
+          groupMembers.some((gm) => gm.group_id === groupId && gm.user_id === member.user_id)
+        )
+      })
+    }
+
     return result
-  }, [members, filters])
+  }, [members, filters, groupMembers])
 
   // Update parent component when filtered members change
   useMemo(() => {
@@ -165,13 +186,24 @@ export function MemberSearchFilter({
     filters.skills.length > 0 ||
     filters.disabilities.length > 0 ||
     filters.equipment.length > 0 ||
-    filters.roles.length > 0
+    filters.roles.length > 0 ||
+    filters.groups.length > 0
 
   const activeFilterCount =
     filters.skills.length +
     filters.disabilities.length +
     filters.equipment.length +
-    filters.roles.length
+    filters.roles.length +
+    filters.groups.length
+
+  const toggleGroup = (groupId: string) => {
+    setFilters((prev) => {
+      const newGroups = prev.groups.includes(groupId)
+        ? prev.groups.filter((g) => g !== groupId)
+        : [...prev.groups, groupId]
+      return { ...prev, groups: newGroups }
+    })
+  }
 
   const toggleCategory = (category: FilterCategory) => {
     setExpandedCategory((prev) => (prev === category ? null : category))
@@ -277,6 +309,54 @@ export function MemberSearchFilter({
               </div>
             )}
           </div>
+
+          {/* Groups Filter - only show if groups exist */}
+          {groups.length > 0 && (
+            <div className="border-b border-border pb-4">
+              <button
+                onClick={() => toggleCategory('groups')}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Groups</span>
+                  {filters.groups.length > 0 && (
+                    <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
+                      {filters.groups.length} selected
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${
+                    expandedCategory === 'groups' ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {expandedCategory === 'groups' && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {groups.filter(g => g.is_active).map((group) => {
+                    const isSelected = filters.groups.includes(group.id)
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => toggleGroup(group.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm transition-colors ${
+                          isSelected
+                            ? 'text-white'
+                            : 'bg-muted hover:bg-muted/80'
+                        }`}
+                        style={isSelected ? { backgroundColor: group.color } : {}}
+                      >
+                        <span className="material-icons text-sm">{group.icon}</span>
+                        {group.name}
+                        <span className="text-xs opacity-75">({group.member_count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Skills Filter */}
           <div className="border-b border-border pb-4">
@@ -473,6 +553,25 @@ export function MemberSearchFilter({
                 <button
                   onClick={() => toggleFilter('equipment', equip)}
                   className="hover:text-amber-500"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            )
+          })}
+          {filters.groups.map((groupId) => {
+            const group = groups.find((g) => g.id === groupId)
+            if (!group) return null
+            return (
+              <span
+                key={groupId}
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300"
+              >
+                <span className="material-icons text-xs">{group.icon}</span>
+                {group.name}
+                <button
+                  onClick={() => toggleGroup(groupId)}
+                  className="hover:text-purple-500"
                 >
                   <X className="h-3 w-3" />
                 </button>

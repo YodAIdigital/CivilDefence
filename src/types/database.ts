@@ -1627,6 +1627,174 @@ export const MAP_POINT_TYPE_CONFIG = {
   },
 } as const
 
+// ==========================================
+// Community Alert Rules Types
+// ==========================================
+
+export type AlertTriggerType = 'webhook' | 'email'
+export type RuleRecipientGroup = 'admin' | 'team' | 'members' | 'groups' | 'specific'
+
+// Community alert rule (stored in database)
+export interface CommunityAlertRule {
+  id: string
+  community_id: string
+
+  // Rule identification
+  name: string
+  description: string | null
+  is_active: boolean
+
+  // Trigger configuration
+  trigger_type: AlertTriggerType
+  webhook_token: string // UUID for webhook authentication
+  trigger_email: string | null // Email address for email triggers
+
+  // Alert configuration
+  alert_title: string
+  alert_message: string
+  alert_level: 'info' | 'warning' | 'danger'
+
+  // Recipient configuration
+  recipient_group: RuleRecipientGroup
+  specific_member_ids: string[] // For 'specific' recipient group
+
+  // Delivery options
+  send_email: boolean
+  send_sms: boolean
+  send_app_notification: boolean
+
+  // Tracking
+  trigger_count: number
+  last_triggered_at: string | null
+
+  // Audit
+  created_by: string
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new alert rule
+export interface CreateCommunityAlertRule {
+  community_id: string
+  name: string
+  description?: string
+  is_active?: boolean
+  trigger_type: AlertTriggerType
+  alert_title: string
+  alert_message: string
+  alert_level?: 'info' | 'warning' | 'danger'
+  recipient_group?: RuleRecipientGroup
+  specific_member_ids?: string[]
+  send_email?: boolean
+  send_sms?: boolean
+  send_app_notification?: boolean
+  created_by: string
+}
+
+// For updating an alert rule
+export interface UpdateCommunityAlertRule {
+  name?: string
+  description?: string
+  is_active?: boolean
+  alert_title?: string
+  alert_message?: string
+  alert_level?: 'info' | 'warning' | 'danger'
+  recipient_group?: RuleRecipientGroup
+  specific_member_ids?: string[]
+  send_email?: boolean
+  send_sms?: boolean
+  send_app_notification?: boolean
+  updated_by: string
+}
+
+// Alert rule trigger history
+export interface AlertRuleTrigger {
+  id: string
+  rule_id: string
+  alert_id: string | null
+
+  // Trigger details
+  trigger_source: 'webhook' | 'email'
+  trigger_payload: Record<string, unknown> | null
+
+  // Status
+  success: boolean
+  error_message: string | null
+
+  // Delivery stats
+  recipient_count: number
+  emails_sent: number
+  sms_sent: number
+  push_sent: number
+
+  // Audit
+  triggered_at: string
+}
+
+// Alert level configuration for rules display
+export const ALERT_RULE_LEVEL_CONFIG = {
+  info: {
+    label: 'Announcement',
+    description: 'General information or announcement',
+    color: '#22c55e',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    borderColor: 'border-green-200 dark:border-green-800',
+  },
+  warning: {
+    label: 'Warning',
+    description: 'Important warning that requires attention',
+    color: '#f59e0b',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+    borderColor: 'border-amber-200 dark:border-amber-800',
+  },
+  danger: {
+    label: 'Emergency',
+    description: 'Critical emergency requiring immediate action',
+    color: '#ef4444',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    borderColor: 'border-red-200 dark:border-red-800',
+  },
+} as const
+
+// Trigger type configuration for display
+export const TRIGGER_TYPE_CONFIG = {
+  webhook: {
+    label: 'Webhook',
+    description: 'Trigger via HTTP POST request',
+    icon: 'webhook',
+  },
+  email: {
+    label: 'Email',
+    description: 'Trigger when email is received',
+    icon: 'email',
+  },
+} as const
+
+// Recipient group configuration for rules
+export const RULE_RECIPIENT_CONFIG = {
+  admin: {
+    label: 'Admins Only',
+    description: 'Only community administrators',
+  },
+  team: {
+    label: 'Team Members',
+    description: 'Admins and team members',
+  },
+  members: {
+    label: 'All Members',
+    description: 'Everyone in the community',
+  },
+  groups: {
+    label: 'Groups',
+    description: 'Select one or more groups',
+  },
+  specific: {
+    label: 'Custom Invites',
+    description: 'Specific selected members',
+  },
+} as const
+
 // Community role configuration for display
 export const COMMUNITY_ROLE_CONFIG = {
   member: {
@@ -1648,6 +1816,138 @@ export const COMMUNITY_ROLE_CONFIG = {
     description: 'Full control over community settings and members',
   },
 } as const
+
+// ==========================================
+// Community Groups Types
+// ==========================================
+
+// Community group (stored in database)
+export interface CommunityGroup {
+  id: string
+  community_id: string
+
+  // Group identification
+  name: string
+  description: string | null
+  color: string
+  icon: string
+
+  // Status
+  is_active: boolean
+  display_order: number
+
+  // Tracking
+  member_count: number
+
+  // Audit
+  created_by: string
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Community group member (junction table)
+export interface CommunityGroupMember {
+  id: string
+  group_id: string
+  user_id: string
+
+  // Audit
+  added_by: string
+  added_at: string
+}
+
+// For creating a new group
+export interface CreateCommunityGroup {
+  community_id: string
+  name: string
+  description?: string
+  color?: string
+  icon?: string
+  is_active?: boolean
+  display_order?: number
+  created_by: string
+}
+
+// For updating a group
+export interface UpdateCommunityGroup {
+  name?: string
+  description?: string
+  color?: string
+  icon?: string
+  is_active?: boolean
+  display_order?: number
+  updated_by: string
+}
+
+// Group with member details
+export interface CommunityGroupWithMembers extends CommunityGroup {
+  members: {
+    id: string
+    user_id: string
+    added_at: string
+    profile?: {
+      id: string
+      full_name: string | null
+      email: string
+      avatar_url: string | null
+    }
+  }[]
+}
+
+// Suggested group templates
+export const SUGGESTED_GROUPS = [
+  { name: 'Civil Defence Management', description: 'Community leadership and coordination team', icon: 'admin_panel_settings', color: '#22c55e' },
+  { name: 'Response Team', description: 'First responders and emergency response members', icon: 'emergency', color: '#ef4444' },
+  { name: 'Fire Crew', description: 'Members trained in fire fighting', icon: 'local_fire_department', color: '#f97316' },
+  { name: 'Medical Team', description: 'Members with medical training or qualifications', icon: 'medical_services', color: '#ec4899' },
+  { name: 'Volunteers', description: 'General volunteer pool', icon: 'volunteer_activism', color: '#8b5cf6' },
+  { name: 'Phone Tree Members', description: 'Members responsible for phone tree communications', icon: 'phone_in_talk', color: '#06b6d4' },
+  { name: 'Flood Risk Homes', description: 'Households in flood-prone areas', icon: 'water', color: '#3b82f6' },
+  { name: 'Zone 1', description: 'Members in geographic Zone 1', icon: 'location_on', color: '#84cc16' },
+  { name: 'Zone 2', description: 'Members in geographic Zone 2', icon: 'location_on', color: '#eab308' },
+  { name: 'Zone 3', description: 'Members in geographic Zone 3', icon: 'location_on', color: '#f59e0b' },
+] as const
+
+// Group icon options for custom groups
+export const GROUP_ICON_OPTIONS = [
+  { value: 'group', label: 'Group' },
+  { value: 'groups', label: 'Groups' },
+  { value: 'admin_panel_settings', label: 'Admin' },
+  { value: 'emergency', label: 'Emergency' },
+  { value: 'local_fire_department', label: 'Fire' },
+  { value: 'medical_services', label: 'Medical' },
+  { value: 'volunteer_activism', label: 'Volunteer' },
+  { value: 'phone_in_talk', label: 'Phone' },
+  { value: 'water', label: 'Water/Flood' },
+  { value: 'location_on', label: 'Location' },
+  { value: 'home', label: 'Home' },
+  { value: 'construction', label: 'Construction' },
+  { value: 'agriculture', label: 'Agriculture' },
+  { value: 'elderly', label: 'Elderly' },
+  { value: 'child_care', label: 'Children' },
+  { value: 'pets', label: 'Pets' },
+  { value: 'directions_car', label: 'Transport' },
+  { value: 'radio', label: 'Radio/Comms' },
+] as const
+
+// Group color options for custom groups
+export const GROUP_COLOR_OPTIONS = [
+  { value: '#ef4444', label: 'Red' },
+  { value: '#f97316', label: 'Orange' },
+  { value: '#f59e0b', label: 'Amber' },
+  { value: '#eab308', label: 'Yellow' },
+  { value: '#84cc16', label: 'Lime' },
+  { value: '#22c55e', label: 'Green' },
+  { value: '#14b8a6', label: 'Teal' },
+  { value: '#06b6d4', label: 'Cyan' },
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#6366f1', label: 'Indigo' },
+  { value: '#8b5cf6', label: 'Violet' },
+  { value: '#a855f7', label: 'Purple' },
+  { value: '#ec4899', label: 'Pink' },
+  { value: '#6b7280', label: 'Gray' },
+] as const
 
 // ==========================================
 // Community Region Types

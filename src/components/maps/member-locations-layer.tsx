@@ -7,7 +7,7 @@ import { useCommunity } from '@/contexts/community-context'
 import { Search, Filter, X, ChevronDown, User, Users, Eye, EyeOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { MapMarker } from './google-map'
-import type { Profile, CommunityRole, ProfileExtended, FieldVisibility } from '@/types/database'
+import type { Profile, CommunityRole, ProfileExtended, FieldVisibility, CommunityGroup } from '@/types/database'
 import {
   SKILL_OPTIONS,
   DISABILITY_OPTIONS,
@@ -32,6 +32,12 @@ export interface CommunityMemberWithLocation {
   equipment: string[] | undefined
 }
 
+// Group member info for filtering
+interface GroupMemberInfo {
+  group_id: string
+  user_id: string
+}
+
 // Filter state for member locations
 interface MemberFilters {
   searchQuery: string
@@ -39,6 +45,7 @@ interface MemberFilters {
   disabilities: string[]
   equipment: string[]
   roles: CommunityRole[]
+  groups: string[]
 }
 
 const initialFilters: MemberFilters = {
@@ -47,9 +54,10 @@ const initialFilters: MemberFilters = {
   disabilities: [],
   equipment: [],
   roles: [],
+  groups: [],
 }
 
-type FilterCategory = 'skills' | 'disabilities' | 'equipment' | 'roles'
+type FilterCategory = 'skills' | 'disabilities' | 'equipment' | 'roles' | 'groups'
 
 interface MemberLocationsLayerProps {
   onMembersChange: (markers: MapMarker[], members: CommunityMemberWithLocation[]) => void
@@ -106,6 +114,8 @@ export function MemberLocationsLayer({
   // When hideToggle is true, always show filters since parent controls visibility
   const [showFilters, setShowFilters] = useState(hideToggle)
   const [expandedCategory, setExpandedCategory] = useState<FilterCategory | null>(null)
+  const [communityGroups, setCommunityGroups] = useState<CommunityGroup[]>([])
+  const [groupMembers, setGroupMembers] = useState<GroupMemberInfo[]>([])
 
   // Get viewer's role
   const viewerRole = useMemo(() => {
@@ -221,6 +231,71 @@ export function MemberLocationsLayer({
     }
   }, [fetchMembers, showMemberLocations])
 
+  // Fetch community groups
+  const fetchGroups = useCallback(async () => {
+    if (!activeCommunity) {
+      setCommunityGroups([])
+      setGroupMembers([])
+      return
+    }
+
+    try {
+      // Fetch groups
+      const supabaseAny = supabase as unknown as {
+        from: (table: string) => {
+          select: (cols: string) => {
+            eq: (col: string, val: string) => {
+              eq: (col: string, val: boolean) => {
+                order: (col: string, opts: { ascending: boolean }) => Promise<{ data: CommunityGroup[] | null; error: Error | null }>
+              }
+            }
+          }
+        }
+      }
+
+      const { data: groupsData } = await supabaseAny
+        .from('community_groups')
+        .select('*')
+        .eq('community_id', activeCommunity.id)
+        .eq('is_active', true)
+        .order('display_order', { ascending: true })
+
+      if (groupsData && groupsData.length > 0) {
+        setCommunityGroups(groupsData)
+
+        // Fetch group members
+        const groupIds = groupsData.map(g => g.id)
+        const membersFetch = supabase as unknown as {
+          from: (table: string) => {
+            select: (cols: string) => {
+              in: (col: string, vals: string[]) => Promise<{ data: { group_id: string; user_id: string }[] | null; error: Error | null }>
+            }
+          }
+        }
+
+        const { data: groupMembersData } = await membersFetch
+          .from('community_group_members')
+          .select('group_id, user_id')
+          .in('group_id', groupIds)
+
+        if (groupMembersData) {
+          setGroupMembers(groupMembersData)
+        }
+      } else {
+        setCommunityGroups([])
+        setGroupMembers([])
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err)
+    }
+  }, [activeCommunity])
+
+  useEffect(() => {
+    if (showMemberLocations) {
+      fetchGroups()
+    }
+  }, [fetchGroups, showMemberLocations])
+
   // Filter members based on active filters
   const filteredMembers = useMemo(() => {
     if (!showMemberLocations) return []
@@ -275,8 +350,17 @@ export function MemberLocationsLayer({
       })
     }
 
+    // Filter by groups
+    if (filters.groups.length > 0) {
+      result = result.filter(member => {
+        return filters.groups.some(groupId =>
+          groupMembers.some(gm => gm.group_id === groupId && gm.user_id === member.user_id)
+        )
+      })
+    }
+
     return result
-  }, [allMembers, filters, showMemberLocations])
+  }, [allMembers, filters, showMemberLocations, groupMembers])
 
   // Convert filtered members to map markers
   const memberMarkers = useMemo((): MapMarker[] => {
@@ -356,13 +440,24 @@ export function MemberLocationsLayer({
     filters.skills.length > 0 ||
     filters.disabilities.length > 0 ||
     filters.equipment.length > 0 ||
-    filters.roles.length > 0
+    filters.roles.length > 0 ||
+    filters.groups.length > 0
 
   const activeFilterCount =
     filters.skills.length +
     filters.disabilities.length +
     filters.equipment.length +
-    filters.roles.length
+    filters.roles.length +
+    filters.groups.length
+
+  const toggleGroup = (groupId: string) => {
+    setFilters(prev => {
+      const newGroups = prev.groups.includes(groupId)
+        ? prev.groups.filter(g => g !== groupId)
+        : [...prev.groups, groupId]
+      return { ...prev, groups: newGroups }
+    })
+  }
 
   return (
     <div className={`space-y-3 ${className}`}>
@@ -524,6 +619,54 @@ export function MemberLocationsLayer({
               </div>
             )}
           </div>
+
+          {/* Groups Filter - only show if groups exist */}
+          {communityGroups.length > 0 && (
+            <div className="border-b border-border pb-3">
+              <button
+                onClick={() => toggleCategory('groups')}
+                className="w-full flex items-center justify-between text-left"
+              >
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium text-sm">Groups</span>
+                  {filters.groups.length > 0 && (
+                    <span className="text-xs bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-2 py-0.5 rounded-full">
+                      {filters.groups.length}
+                    </span>
+                  )}
+                </div>
+                <ChevronDown
+                  className={`h-4 w-4 text-muted-foreground transition-transform ${
+                    expandedCategory === 'groups' ? 'rotate-180' : ''
+                  }`}
+                />
+              </button>
+              {expandedCategory === 'groups' && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {communityGroups.map(group => {
+                    const isSelected = filters.groups.includes(group.id)
+                    return (
+                      <button
+                        key={group.id}
+                        onClick={() => toggleGroup(group.id)}
+                        className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs transition-colors ${
+                          isSelected
+                            ? 'text-white'
+                            : 'bg-muted hover:bg-muted/80'
+                        }`}
+                        style={isSelected ? { backgroundColor: group.color } : {}}
+                      >
+                        <span className="material-icons text-xs">{group.icon}</span>
+                        {group.name}
+                        <span className="opacity-75">({group.member_count})</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Skills Filter */}
           <div className="border-b border-border pb-3">

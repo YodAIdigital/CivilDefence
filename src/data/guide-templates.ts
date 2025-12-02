@@ -12,6 +12,7 @@ export type DisasterType =
   | 'snow'
   | 'pandemic'
   | 'solar_storm'
+  | 'invasion'
 
 export interface GuideSection {
   id: string
@@ -928,6 +929,140 @@ export const guideTemplates: GuideTemplate[] = [
       { name: 'Power Company', number: 'Check your bill', description: 'Report outages' },
       { name: 'NOAA Space Weather', number: 'spaceweather.gov', description: 'Space weather forecasts' }
     ]
+  },
+  {
+    id: 'invasion-template',
+    type: 'invasion',
+    name: 'Outside Invasion & Security Emergency',
+    description: 'Critical guide for community protection during armed conflict, hostile incursions, or raider attacks during extreme events.',
+    icon: 'shield',
+    color: 'from-red-700 to-slate-800',
+    sections: {
+      before: [
+        {
+          id: 'invasion-before-1',
+          title: 'Establish Community Security',
+          content: 'Form a community security team with designated roles. Establish communication protocols and check-in schedules. Identify trusted neighbours and create mutual aid agreements. Map your community boundaries and identify vulnerable entry points.',
+          icon: 'groups'
+        },
+        {
+          id: 'invasion-before-2',
+          title: 'Fortify Your Home',
+          content: 'Reinforce doors with deadbolts and door bars. Secure windows with locks and consider security film. Create a safe room in an interior space with no windows. Store emergency supplies in multiple hidden locations. Remove exterior lighting that silhouettes occupants.',
+          icon: 'home'
+        },
+        {
+          id: 'invasion-before-3',
+          title: 'Establish Communication Systems',
+          content: 'Set up radio communication (CB, FRS, or ham radio) that does not rely on cell networks. Create code words for different threat levels. Establish a community alert system (horns, bells, lights). Plan for communication blackouts.',
+          icon: 'settings_input_antenna'
+        },
+        {
+          id: 'invasion-before-4',
+          title: 'Create Evacuation and Hiding Plans',
+          content: 'Identify multiple evacuation routes away from main roads. Locate hiding spots both in your home and community. Prepare go-bags with essentials for rapid departure. Establish rally points for separated family members. Know locations of nearby communities that may offer refuge.',
+          icon: 'route'
+        },
+        {
+          id: 'invasion-before-5',
+          title: 'Secure Essential Resources',
+          content: 'Store food and water in hidden, distributed locations. Protect fuel supplies. Secure medical supplies and medications. Have backup power sources. Consider what resources might make you a target and plan accordingly.',
+          icon: 'inventory_2'
+        }
+      ],
+      during: [
+        {
+          id: 'invasion-during-1',
+          title: 'Implement Security Protocols',
+          content: 'Activate community alert system immediately. Move to safe room or evacuation point as situation dictates. Maintain radio silence unless necessary. Follow pre-established roles and protocols. Keep children calm and quiet.',
+          icon: 'security'
+        },
+        {
+          id: 'invasion-during-2',
+          title: 'Assess and Respond to Threats',
+          content: 'Gather intelligence before acting. Avoid confrontation when possible - your goal is survival. If approached, remain calm and non-threatening. Do not reveal location of others, supplies, or valuables. Follow instructions from community security team.',
+          icon: 'visibility'
+        },
+        {
+          id: 'invasion-during-3',
+          title: 'If Evacuation Is Required',
+          content: 'Leave immediately via pre-planned routes. Travel light - take go-bag only. Avoid main roads and predictable paths. Move during low-visibility conditions when possible. Stay together as a group for safety.',
+          icon: 'directions_run'
+        },
+        {
+          id: 'invasion-during-4',
+          title: 'If Sheltering In Place',
+          content: 'Stay away from windows and exterior walls. Keep lights off or blacked out. Remain quiet and limit movement. Have supplies accessible without leaving safe area. Monitor communications for updates.',
+          icon: 'shield'
+        },
+        {
+          id: 'invasion-during-5',
+          title: 'Protect Vulnerable Members',
+          content: 'Prioritise safety of children, elderly, and disabled. Keep them in safest location. Assign guardians to vulnerable individuals. Have medication and special needs supplies ready. Maintain calm to prevent panic.',
+          icon: 'family_restroom'
+        }
+      ],
+      after: [
+        {
+          id: 'invasion-after-1',
+          title: 'Verify Safety Before Emerging',
+          content: 'Wait for all-clear signal from trusted sources. Scout the area carefully before moving freely. Check on all community members. Assess damage to property and resources. Re-establish communication with broader network.',
+          icon: 'search'
+        },
+        {
+          id: 'invasion-after-2',
+          title: 'Account for All Community Members',
+          content: 'Conduct headcount of all residents. Search for missing persons. Document injuries and provide first aid. Identify anyone who needs evacuation for medical care. Support those experiencing trauma.',
+          icon: 'people'
+        },
+        {
+          id: 'invasion-after-3',
+          title: 'Secure Resources and Property',
+          content: 'Assess and document losses. Secure remaining supplies. Repair defensive measures. Redistribute resources if some families suffered losses. Plan for potential follow-up incidents.',
+          icon: 'lock'
+        },
+        {
+          id: 'invasion-after-4',
+          title: 'Strengthen Community Resilience',
+          content: 'Review what worked and what needs improvement. Update security protocols based on lessons learned. Strengthen relationships with neighbouring communities. Consider long-term sustainability and protection strategies.',
+          icon: 'engineering'
+        },
+        {
+          id: 'invasion-after-5',
+          title: 'Address Psychological Impact',
+          content: 'Recognise trauma responses in adults and children. Create space for community members to process experiences. Watch for signs of PTSD and provide support. Maintain routines to restore sense of normalcy. Seek professional help when available.',
+          icon: 'psychology'
+        }
+      ]
+    },
+    supplies: [
+      'Two-way radios (multiple sets with spare batteries)',
+      'First aid kit (trauma-rated with tourniquets, bandages)',
+      'Defensive tools (flashlights, whistles, personal alarms)',
+      'Door reinforcement bars and window locks',
+      'Blackout curtains or materials',
+      'Go-bags for each family member',
+      'Water (4L per person per day, 2+ weeks)',
+      'Non-perishable food (2+ weeks, easily hidden)',
+      'Medications and medical supplies',
+      'Sturdy footwear for rapid movement',
+      'Warm clothing and rain gear',
+      'Maps of local area and region',
+      'Cash in small denominations',
+      'Important documents (copies in waterproof bag)',
+      'Fire extinguisher',
+      'Tools for barricading (hammer, nails, boards)',
+      'Portable water filter',
+      'Solar charger or hand-crank devices',
+      'Whistle and signaling mirror',
+      'Rope and cordage'
+    ],
+    emergencyContacts: [
+      { name: 'Emergency Services', number: '111', description: 'Police, Fire, Ambulance (if available)' },
+      { name: 'Community Security Team', number: 'Radio Channel', description: 'Pre-established frequency' },
+      { name: 'Neighbouring Community', number: 'Radio Channel', description: 'Mutual aid network' },
+      { name: 'Civil Defence', number: 'Check local listings', description: 'Emergency coordination' }
+    ]
   }
 ]
 
@@ -951,7 +1086,8 @@ export function getDisasterTypeName(type: DisasterType): string {
     tsunami: 'Tsunami',
     snow: 'Snow & Ice',
     pandemic: 'Pandemic',
-    solar_storm: 'Solar Storm'
+    solar_storm: 'Solar Storm',
+    invasion: 'Outside Invasion'
   }
   return names[type]
 }
