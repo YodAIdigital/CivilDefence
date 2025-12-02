@@ -78,8 +78,8 @@ export function SyncStatusIndicator({ showDetails = false, className = '' }: Syn
         onMouseLeave={() => setShowTooltip(false)}
         disabled={isOffline || isSyncing}
         className={`
-          flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all
-          ${isOffline ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'}
+          flex items-center gap-2 p-1 rounded-lg transition-all
+          hover:bg-gray-100 dark:hover:bg-gray-800
           ${isSyncing ? 'cursor-wait' : isOffline ? 'cursor-not-allowed' : 'cursor-pointer'}
         `}
         title={isOffline ? 'You are offline' : isSyncing ? 'Syncing...' : 'Click to sync'}
@@ -159,8 +159,8 @@ export function FloatingSyncStatus() {
     }
   }, [isOffline, pendingCount])
 
-  // Don't show if dismissed or everything is fine
-  if (dismissed || (!isOffline && pendingCount === 0 && !isSyncing)) {
+  // Don't show if dismissed, syncing (runs in background), or everything is fine
+  if (dismissed || isSyncing || (!isOffline && pendingCount === 0)) {
     return null
   }
 

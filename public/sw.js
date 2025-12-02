@@ -1,4 +1,4 @@
-const CACHE_VERSION = 6
+const CACHE_VERSION = 7
 const STATIC_CACHE_NAME = `civildefencepro-static-v${CACHE_VERSION}`
 const DYNAMIC_CACHE_NAME = `civildefencepro-dynamic-v${CACHE_VERSION}`
 
@@ -158,10 +158,11 @@ async function staleWhileRevalidate(request) {
   const cached = await caches.match(request)
 
   const fetchPromise = fetch(request)
-    .then((response) => {
+    .then(async (response) => {
       if (response.ok) {
-        const cache = caches.open(STATIC_CACHE_NAME)
-        cache.then((c) => c.put(request, response.clone()))
+        const responseClone = response.clone()
+        const cache = await caches.open(STATIC_CACHE_NAME)
+        await cache.put(request, responseClone)
       }
       return response
     })
@@ -171,6 +172,7 @@ async function staleWhileRevalidate(request) {
     })
 
   if (cached) {
+    // Trigger background fetch but don't wait for it
     fetchPromise
     return cached
   }

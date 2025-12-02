@@ -10,7 +10,8 @@ import { useAuth } from '@/contexts/auth-context'
 import { CommunityLocationsManager } from '@/components/maps/community-locations-manager'
 import { ContactsManager } from '@/components/community/contacts-manager'
 import { RegionEditor } from '@/components/maps/region-editor'
-import { MemberSearchFilter, MemberExtendedInfo } from '@/components/community/member-search-filter'
+import { MemberSearchFilter } from '@/components/community/member-search-filter'
+import { MemberProfileCard } from '@/components/community/member-profile-card'
 import { UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -139,6 +140,14 @@ export default function CommunityManagePage() {
   const [inviteRole, setInviteRole] = useState<CommunityRole>('member')
   const [isInviting, setIsInviting] = useState(false)
 
+  // Community name/description editing state
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editedName, setEditedName] = useState('')
+  const [isEditingDescription, setIsEditingDescription] = useState(false)
+  const [editedDescription, setEditedDescription] = useState('')
+  const [isSavingName, setIsSavingName] = useState(false)
+  const [isSavingDescription, setIsSavingDescription] = useState(false)
+
   // Alert form state (modal removed - now using tab)
   const [_showAlertModal, _setShowAlertModal] = useState(false)
   const [alertTitle, setAlertTitle] = useState('')
@@ -158,6 +167,7 @@ export default function CommunityManagePage() {
     'members': true,
     'contacts': true,
     'about-roles': true,
+    'community-name': true,
     'visibility': true,
     'region': true,
     'locations': true,
@@ -726,6 +736,58 @@ export default function CommunityManagePage() {
     }
   }
 
+  const saveCommunityName = async () => {
+    if (!community || !editedName.trim()) return
+
+    try {
+      setIsSavingName(true)
+      setError(null)
+
+      const { error } = await supabase
+        .from('communities')
+        .update({ name: editedName.trim() })
+        .eq('id', community.id)
+
+      if (error) throw error
+
+      setCommunity({ ...community, name: editedName.trim() })
+      setIsEditingName(false)
+      setSuccess('Community name updated successfully')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error updating community name:', err)
+      setError('Failed to update community name')
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
+  const saveCommunityDescription = async () => {
+    if (!community) return
+
+    try {
+      setIsSavingDescription(true)
+      setError(null)
+
+      const { error } = await supabase
+        .from('communities')
+        .update({ description: editedDescription.trim() || null })
+        .eq('id', community.id)
+
+      if (error) throw error
+
+      setCommunity({ ...community, description: editedDescription.trim() || null })
+      setIsEditingDescription(false)
+      setSuccess('Community description updated successfully')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error updating community description:', err)
+      setError('Failed to update community description')
+    } finally {
+      setIsSavingDescription(false)
+    }
+  }
+
   const saveRegion = async (polygon: RegionPolygon | null, color: string, opacity: number) => {
     if (!community) return
 
@@ -875,7 +937,7 @@ export default function CommunityManagePage() {
     { id: 'alerts' as TabType, label: 'Send Alert', icon: 'campaign', description: 'Send alerts to members' },
     { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people', description: `${members.filter(m => m.role === 'admin').length} admins, ${members.filter(m => m.role === 'team_member').length} team members` },
     { id: 'events' as TabType, label: 'Manage Events', icon: 'event', href: `/community/${communityId}/events`, description: 'Schedule community events' },
-    { id: 'visibility' as TabType, label: 'Response Map', icon: 'map', description: 'Community visibility' },
+    { id: 'visibility' as TabType, label: 'Settings', icon: 'settings', description: 'Configure community' },
   ]
 
   return (
@@ -1308,18 +1370,17 @@ export default function CommunityManagePage() {
               <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['members'] ? '-rotate-90' : ''}`} />
             </button>
             <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['members'] ? 'max-h-0' : 'max-h-[3000px]'}`}>
-            <div className="border-b border-border p-4 space-y-4">
-              {/* Invite Button */}
-              <div className="flex justify-end">
-                <Button onClick={() => setShowInviteModal(true)} className="gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Invite Member
-                </Button>
-              </div>
-              {/* Advanced Search and Filter */}
+            <div className="border-b border-border p-4">
+              {/* Search/Filter and Invite Button inline */}
               <MemberSearchFilter
                 members={members}
                 onFilteredMembersChange={handleFilteredMembersChange}
+                inviteButton={
+                  <Button onClick={() => setShowInviteModal(true)} className="gap-2 shrink-0">
+                    <UserPlus className="h-4 w-4" />
+                    Invite Member
+                  </Button>
+                }
               />
             </div>
 
@@ -1383,90 +1444,17 @@ export default function CommunityManagePage() {
                   {members.length === 0 ? 'No members yet' : 'No members found matching your filters'}
                 </div>
               ) : (
-                displayedMembers.map(member => {
-                  const isCurrentUser = member.user_id === user?.id
-                  const roleConfig = COMMUNITY_ROLE_CONFIG[member.role as keyof typeof COMMUNITY_ROLE_CONFIG]
-
-                  return (
-                    <div
-                      key={member.id}
-                      className="p-4 hover:bg-muted/50"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                            <span className="material-icons text-primary">person</span>
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium">
-                                {member.profile?.full_name || member.profile?.email || 'Unknown User'}
-                              </span>
-                              {isCurrentUser && (
-                                <span className="text-xs text-muted-foreground">(You)</span>
-                              )}
-                              {member.role !== 'member' && roleConfig && (
-                                <span
-                                  className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium"
-                                  style={{
-                                    backgroundColor: `${roleConfig.color}20`,
-                                    color: roleConfig.color
-                                  }}
-                                >
-                                  <span className="material-icons text-xs">{roleConfig.icon}</span>
-                                  {roleConfig.label}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                              <span>{member.profile?.email}</span>
-                              {member.profile?.phone && (
-                                <span className="flex items-center gap-1">
-                                  <span className="material-icons text-xs">phone</span>
-                                  {member.profile.phone}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {/* Role selector */}
-                          <select
-                            value={member.role}
-                            onChange={(e) => updateMemberRole(member.id, e.target.value as CommunityRole)}
-                            disabled={updatingMemberId === member.id}
-                            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
-                          >
-                            <option value="member">Member</option>
-                            <option value="team_member">Team Member</option>
-                            <option value="admin">Admin</option>
-                          </select>
-
-                          {/* Remove button */}
-                          {!isCurrentUser && (
-                            <button
-                              onClick={() => removeMember(member.id, member.user_id)}
-                              disabled={updatingMemberId === member.id}
-                              className="rounded-lg p-2 text-muted-foreground hover:bg-muted hover:text-destructive"
-                              title="Remove member"
-                            >
-                              {updatingMemberId === member.id ? (
-                                <span className="material-icons animate-spin text-lg">sync</span>
-                              ) : (
-                                <span className="material-icons text-lg">person_remove</span>
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      {/* Extended Info (skills, disabilities, equipment) */}
-                      <div className="ml-13 pl-13">
-                        <MemberExtendedInfo profile={member.profile} />
-                      </div>
-                    </div>
-                  )
-                })
+                displayedMembers.map(member => (
+                  <MemberProfileCard
+                    key={member.id}
+                    member={member}
+                    isCurrentUser={member.user_id === user?.id}
+                    isAdmin={isAdmin}
+                    onRoleChange={updateMemberRole}
+                    onRemove={removeMember}
+                    isUpdating={updatingMemberId === member.id}
+                  />
+                ))
               )}
             </div>
             </div>
@@ -1540,22 +1528,153 @@ export default function CommunityManagePage() {
 
       {activeTab === 'visibility' && (
         <div className="space-y-6">
-          {/* Visibility Settings */}
+          {/* Community Details Section - Name, Description, Visibility combined */}
           <div className="rounded-xl border border-border bg-card">
             <button
-              onClick={() => toggleSection('visibility')}
+              onClick={() => toggleSection('community-name')}
               className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
             >
               <div className="text-left">
-                <h2 className="text-lg font-semibold">Community Visibility</h2>
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-[#FEB100]">edit</span>
+                  Community Details
+                </h2>
                 <p className="text-sm text-muted-foreground">
-                  Control who can find and join your community
+                  Manage your community&apos;s name, description, and visibility
                 </p>
               </div>
-              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['visibility'] ? '-rotate-90' : ''}`} />
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['community-name'] ? '-rotate-90' : ''}`} />
             </button>
-            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['visibility'] ? 'max-h-0' : 'max-h-[500px]'}`}>
-              <div className="p-4">
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['community-name'] ? 'max-h-0' : 'max-h-[1000px]'}`}>
+              <div className="p-4 space-y-4">
+                {/* Community Name */}
+                <div className="flex items-center gap-4 p-4 rounded-lg bg-muted/50">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <span className="material-icons text-2xl text-primary">groups</span>
+                  </div>
+                  <div className="flex-1">
+                    {isEditingName ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={editedName}
+                          onChange={(e) => setEditedName(e.target.value)}
+                          placeholder="Enter community name"
+                          className="flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && editedName.trim()) {
+                              saveCommunityName()
+                            } else if (e.key === 'Escape') {
+                              setIsEditingName(false)
+                              setEditedName(community?.name || '')
+                            }
+                          }}
+                          autoFocus
+                        />
+                        <Button
+                          onClick={saveCommunityName}
+                          disabled={isSavingName || !editedName.trim()}
+                          size="sm"
+                        >
+                          {isSavingName ? (
+                            <span className="material-icons animate-spin text-lg">sync</span>
+                          ) : (
+                            'Save'
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setIsEditingName(false)
+                            setEditedName(community?.name || '')
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Name</p>
+                        <h3 className="font-semibold">{community?.name}</h3>
+                      </>
+                    )}
+                  </div>
+                  {!isEditingName && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditedName(community?.name || '')
+                        setIsEditingName(true)
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+
+                {/* Community Description */}
+                <div className="flex items-start gap-4 p-4 rounded-lg bg-muted/50">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500/10">
+                    <span className="material-icons text-2xl text-blue-500">description</span>
+                  </div>
+                  <div className="flex-1">
+                    {isEditingDescription ? (
+                      <div className="space-y-2">
+                        <textarea
+                          value={editedDescription}
+                          onChange={(e) => setEditedDescription(e.target.value)}
+                          placeholder="Enter a description for your community..."
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                          rows={3}
+                          autoFocus
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            onClick={saveCommunityDescription}
+                            disabled={isSavingDescription}
+                            size="sm"
+                          >
+                            {isSavingDescription ? (
+                              <span className="material-icons animate-spin text-lg">sync</span>
+                            ) : (
+                              'Save'
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setIsEditingDescription(false)
+                              setEditedDescription(community?.description || '')
+                            }}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Description</p>
+                        <p className="text-sm mt-1">
+                          {community?.description || <span className="text-muted-foreground italic">No description set</span>}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {!isEditingDescription && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditedDescription(community?.description || '')
+                        setIsEditingDescription(true)
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  )}
+                </div>
+
+                {/* Visibility Toggle */}
                 <div className="flex items-center justify-between p-4 rounded-lg bg-muted/50">
                   <div className="flex items-center gap-4">
                     <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
@@ -1568,11 +1687,12 @@ export default function CommunityManagePage() {
                       </span>
                     </div>
                     <div>
-                      <h3 className="font-semibold">{community?.is_public ? 'Public Community' : 'Private Community'}</h3>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide">Visibility</p>
+                      <h3 className="font-semibold">{community?.is_public ? 'Public' : 'Private'}</h3>
                       <p className="text-sm text-muted-foreground">
                         {community?.is_public
-                          ? 'Anyone can find and request to join this community'
-                          : 'Only invited users can join this community'}
+                          ? 'Anyone can find and request to join'
+                          : 'Only invited users can join'}
                       </p>
                     </div>
                   </div>

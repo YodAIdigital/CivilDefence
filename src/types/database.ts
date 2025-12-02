@@ -954,6 +954,15 @@ export interface EmergencyContact {
   relationship: string // e.g., 'spouse', 'parent', 'sibling', 'child', 'friend', 'neighbor', 'other'
 }
 
+// Household member
+export interface HouseholdMember {
+  id: string
+  name: string
+  age: string // stored as string to allow ranges like "5" or empty
+  contact_number?: string // optional - may not apply to children
+  email?: string // optional - may not apply to children
+}
+
 // Insurance details with optional contact number
 export interface InsuranceDetails {
   provider?: string
@@ -1029,6 +1038,9 @@ export interface ProfileExtended {
   mobile_number?: string
   secondary_number?: string
 
+  // Household Members
+  household_members?: HouseholdMember[]
+
   // Emergency Contacts (multiple)
   emergency_contacts?: EmergencyContact[]
 
@@ -1072,6 +1084,7 @@ export interface ProfileExtended {
   // Visibility settings for each field group
   visibility?: {
     personal_info?: FieldVisibility
+    household?: FieldVisibility
     emergency_contact?: FieldVisibility
     insurance?: FieldVisibility
     utilities?: FieldVisibility

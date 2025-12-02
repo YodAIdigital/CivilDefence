@@ -494,55 +494,56 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           )}
         </nav>
 
-        {/* Sync Status & User Section */}
+        {/* User Section */}
         <div className="border-t border-border p-3">
-          {/* Sync Status */}
-          <div className={`mb-3 ${isCollapsed ? 'flex justify-center' : ''}`}>
-            <SyncStatusIndicator showDetails={!isCollapsed} />
-          </div>
-          <Link
-            href="/profile"
-            className={`flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted transition-colors ${isCollapsed ? 'justify-center' : ''}`}
-          >
-            <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent">
-              {avatarUrl ? (
-                <img
-                  src={avatarUrl}
-                  alt={profile?.full_name || 'User'}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    // Fallback to initials on error
-                    e.currentTarget.style.display = 'none'
-                    e.currentTarget.nextElementSibling?.classList.remove('hidden')
-                  }}
-                />
-              ) : null}
-              <div className={`flex h-full w-full items-center justify-center text-sm font-medium text-white ${avatarUrl ? 'hidden' : ''}`}>
-                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
-              </div>
-            </div>
-            {!isCollapsed && (
-              <div className="flex-1 overflow-hidden">
-                <p className="truncate text-sm font-medium">{profile?.full_name || 'User'}</p>
-                <p className="truncate text-xs text-muted-foreground capitalize">
-                  {profile?.role || 'member'}
-                </p>
-              </div>
-            )}
-          </Link>
-          {!isCollapsed && (
-            <button
-              onClick={handleSignOut}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-border py-2 text-sm text-muted-foreground hover:bg-muted hover:text-destructive"
+          <div className={`flex items-center gap-2 ${isCollapsed ? 'justify-center' : ''}`}>
+            <Link
+              href="/profile"
+              className={`flex items-center gap-3 rounded-lg p-1.5 hover:bg-muted transition-colors flex-1 min-w-0 ${isCollapsed ? 'justify-center flex-initial' : ''}`}
             >
-              <span className="material-icons-outlined text-lg">logout</span>
-              Sign Out
-            </button>
-          )}
+              <div className="h-9 w-9 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={profile?.full_name || 'User'}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      // Fallback to initials on error
+                      e.currentTarget.style.display = 'none'
+                      e.currentTarget.nextElementSibling?.classList.remove('hidden')
+                    }}
+                  />
+                ) : null}
+                <div className={`flex h-full w-full items-center justify-center text-sm font-medium text-white ${avatarUrl ? 'hidden' : ''}`}>
+                  {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                </div>
+              </div>
+              {!isCollapsed && (
+                <div className="flex-1 overflow-hidden">
+                  <p className="truncate text-sm font-medium">{profile?.full_name || 'User'}</p>
+                  <p className="truncate text-xs text-muted-foreground capitalize">
+                    {profile?.role || 'member'}
+                  </p>
+                </div>
+              )}
+            </Link>
+            {!isCollapsed && (
+              <button
+                onClick={handleSignOut}
+                className="flex-shrink-0 p-2 rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive transition-colors"
+                title="Sign Out"
+              >
+                <span className="material-icons-outlined text-xl">logout</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Version Display */}
-        <VersionDisplay collapsed={isCollapsed} />
+        {/* Version & Sync Status */}
+        <div className={`px-3 py-2 border-t border-border flex items-center gap-2 ${isCollapsed ? 'flex-col' : 'justify-between'}`}>
+          <VersionDisplay collapsed={isCollapsed} inline />
+          <SyncStatusIndicator showDetails={false} />
+        </div>
       </aside>
 
       {/* Main Content */}
@@ -552,7 +553,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         }`}
       >
         {/* Page Content - pt-14 on mobile for fixed header, p-4 on mobile, p-6 on desktop */}
-        <main className="flex-1 pt-14 px-4 pb-4 md:pt-0 md:p-6 w-full max-w-full overflow-x-hidden">{children}</main>
+        <main className="flex-1 pt-14 px-4 pb-4 md:pt-6 md:px-6 md:pb-6 w-full max-w-full overflow-x-hidden">{children}</main>
       </div>
     </div>
   )

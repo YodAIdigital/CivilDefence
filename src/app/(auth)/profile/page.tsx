@@ -14,6 +14,7 @@ import {
   type InsuranceDetails,
   type UtilityCompany,
   type UtilityType,
+  type HouseholdMember,
   SKILL_OPTIONS,
   DISABILITY_OPTIONS,
   EQUIPMENT_OPTIONS,
@@ -25,6 +26,7 @@ import { AddressAutocomplete, type AddressResult } from '@/components/maps/addre
 
 type VisibilityKey =
   | 'personal_info'
+  | 'household'
   | 'emergency_contact'
   | 'insurance'
   | 'utilities'
@@ -47,6 +49,9 @@ interface FormData {
   address_lng?: number | undefined
   mobile_number: string
   secondary_number: string
+
+  // Household Members
+  household_members: HouseholdMember[]
 
   // Emergency Contacts (multiple)
   emergency_contacts: EmergencyContact[]
@@ -79,6 +84,7 @@ interface FormData {
   // Visibility
   visibility: {
     personal_info: FieldVisibility
+    household: FieldVisibility
     emergency_contact: FieldVisibility
     insurance: FieldVisibility
     utilities: FieldVisibility
@@ -92,6 +98,7 @@ interface FormData {
 
 const defaultVisibility: FormData['visibility'] = {
   personal_info: 'private',
+  household: 'civil_defence_only',
   emergency_contact: 'civil_defence_only',
   insurance: 'private',
   utilities: 'private',
@@ -116,6 +123,7 @@ const initialFormData: FormData = {
   address: '',
   mobile_number: '',
   secondary_number: '',
+  household_members: [],
   emergency_contacts: [],
   home_insurance: { ...emptyInsurance },
   car_insurance: { ...emptyInsurance },
@@ -214,6 +222,7 @@ export default function ProfilePage() {
         ...(extendedData.address_lng != null && { address_lng: extendedData.address_lng }),
         mobile_number: extendedData.mobile_number || profile.phone || '',
         secondary_number: extendedData.secondary_number || '',
+        household_members: extendedData.household_members || [],
         emergency_contacts: emergencyContacts,
         home_insurance: homeInsurance,
         car_insurance: carInsurance,
@@ -308,6 +317,36 @@ export default function ProfilePage() {
     }))
   }
 
+  // Household member handlers
+  const addHouseholdMember = () => {
+    const newMember: HouseholdMember = {
+      id: `member_${Date.now()}`,
+      name: '',
+      age: '',
+      contact_number: '',
+    }
+    setFormData((prev) => ({
+      ...prev,
+      household_members: [...prev.household_members, newMember],
+    }))
+  }
+
+  const updateHouseholdMember = (id: string, field: keyof HouseholdMember, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      household_members: prev.household_members.map((member) =>
+        member.id === id ? { ...member, [field]: value } : member
+      ),
+    }))
+  }
+
+  const removeHouseholdMember = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      household_members: prev.household_members.filter((member) => member.id !== id),
+    }))
+  }
+
   // Insurance handlers
   const updateInsurance = (
     type: 'home_insurance' | 'car_insurance' | 'medical_insurance',
@@ -387,6 +426,8 @@ export default function ProfilePage() {
         address: formData.address,
         mobile_number: formData.mobile_number,
         secondary_number: formData.secondary_number,
+        // Household members
+        household_members: formData.household_members,
         // New format: multiple emergency contacts
         emergency_contacts: formData.emergency_contacts,
         // New format: insurance with contact numbers
@@ -440,6 +481,7 @@ export default function ProfilePage() {
 
   const sections = [
     { id: 'personal', label: 'Personal Information', icon: 'person' },
+    { id: 'household', label: 'Household Members', icon: 'family_restroom' },
     { id: 'emergency', label: 'Emergency Contact', icon: 'contact_phone' },
     { id: 'insurance', label: 'Insurance Details', icon: 'policy' },
     { id: 'utilities', label: 'Utility Companies', icon: 'bolt' },
@@ -612,6 +654,117 @@ export default function ProfilePage() {
                     Email cannot be changed here. Contact support if needed.
                   </p>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Household Members */}
+          {activeSection === 'household' && (
+            <div className="rounded-xl bg-card p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold">Household Members</h2>
+                <VisibilitySelect
+                  value={formData.visibility.household}
+                  onChange={(v) => handleVisibilityChange('household', v)}
+                  fieldName="household members"
+                />
+              </div>
+              <p className="mb-4 text-sm text-muted-foreground">
+                List the people who live in your household. This helps emergency services understand who may need assistance at your address.
+              </p>
+
+              {/* Existing household members list */}
+              <div className="space-y-4">
+                {formData.household_members.map((member, index) => (
+                  <div
+                    key={member.id}
+                    className="rounded-lg border border-border p-4 bg-muted/30"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-muted-foreground">
+                        Member {index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeHouseholdMember(member.id)}
+                        className="text-destructive hover:text-destructive/80 p-1"
+                        title="Remove member"
+                      >
+                        <span className="material-icons text-lg">delete</span>
+                      </button>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Name *</label>
+                        <input
+                          type="text"
+                          value={member.name}
+                          onChange={(e) =>
+                            updateHouseholdMember(member.id, 'name', e.target.value)
+                          }
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                          placeholder="Full name"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Age</label>
+                        <input
+                          type="text"
+                          value={member.age}
+                          onChange={(e) =>
+                            updateHouseholdMember(member.id, 'age', e.target.value)
+                          }
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                          placeholder="e.g., 35 or 5"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Contact Number</label>
+                        <input
+                          type="tel"
+                          value={member.contact_number || ''}
+                          onChange={(e) =>
+                            updateHouseholdMember(member.id, 'contact_number', e.target.value)
+                          }
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                          placeholder="+64 21 123 4567"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Email Address</label>
+                        <input
+                          type="email"
+                          value={member.email || ''}
+                          onChange={(e) =>
+                            updateHouseholdMember(member.id, 'email', e.target.value)
+                          }
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2"
+                          placeholder="email@example.com"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Add household member button */}
+              <button
+                type="button"
+                onClick={addHouseholdMember}
+                className="mt-4 w-full rounded-lg border-2 border-dashed border-border p-4 text-muted-foreground hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-2"
+              >
+                <span className="material-icons">add</span>
+                Add Household Member
+              </button>
+
+              <div className="mt-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 p-4">
+                <p className="text-sm text-blue-800 dark:text-blue-200 flex items-start gap-2">
+                  <span className="material-icons text-lg mt-0.5">info</span>
+                  <span>
+                    <strong>Tip:</strong> Include all people living at your address, including children.
+                    Contact numbers are optional but helpful for adults who may need to be reached separately.
+                  </span>
+                </p>
               </div>
             </div>
           )}

@@ -1,123 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-
-interface ChecklistItem {
-  id: string
-  name: string
-  description?: string
-  checked: boolean
-  lastChecked?: string // ISO date string
-  recheckDays: number // Days until recheck needed
-}
-
-interface ChecklistCategory {
-  id: string
-  name: string
-  icon: string
-  items: ChecklistItem[]
-}
+import { useState, useEffect, useCallback } from 'react'
+import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
+import { useCommunity } from '@/contexts/community-context'
+import {
+  generateDynamicChecklist,
+  getChecklistSummary,
+  type ChecklistCategory,
+  type ChecklistItem,
+  type ResponsePlanSupplies,
+} from '@/lib/dynamic-kit-generator'
+import type { ProfileExtended, HouseholdMember, CommunityGuide } from '@/types/database'
+import { guideTemplates } from '@/data/guide-templates'
 
 type ItemStatus = 'ok' | 'warning' | 'overdue' | 'unchecked'
 
-const CHECKLIST_STORAGE_KEY = 'civildefence_checklist'
+const CHECKLIST_STORAGE_KEY = 'civildefence_checklist_v2'
 
-// Recheck periods in days
-const RECHECK_PERIODS = {
-  perishable: 90, // 3 months for water, food, batteries
-  medical: 90, // 3 months for medications
-  equipment: 180, // 6 months for tools, equipment
-  documents: 365, // 1 year for documents
-  clothing: 180, // 6 months for clothing items
+// Storage format for checked items
+interface StoredChecklistData {
+  version: number
+  items: Record<string, { checked: boolean; lastChecked?: string }>
+  lastUpdated: string
 }
-
-const defaultChecklist: ChecklistCategory[] = [
-  {
-    id: 'water',
-    name: 'Water & Food',
-    icon: 'water_drop',
-    items: [
-      { id: 'water-1', name: 'Drinking water (3L per person per day for 3+ days)', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'water-2', name: 'Water purification tablets or filter', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'food-1', name: 'Non-perishable food (3+ days supply)', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'food-2', name: 'Manual can opener', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'food-3', name: 'Eating utensils (plates, cups, cutlery)', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'food-4', name: 'Baby food/formula (if needed)', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'food-5', name: 'Pet food (if needed)', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-    ],
-  },
-  {
-    id: 'first-aid',
-    name: 'First Aid & Medical',
-    icon: 'medical_services',
-    items: [
-      { id: 'med-1', name: 'First aid kit', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-2', name: 'Prescription medications (7+ day supply)', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-3', name: 'Pain relievers (paracetamol, ibuprofen)', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-4', name: 'Antiseptic wipes/solution', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-5', name: 'Bandages and dressings', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-6', name: 'Scissors and tweezers', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'med-7', name: 'Thermometer', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'med-8', name: 'Face masks', checked: false, recheckDays: RECHECK_PERIODS.medical },
-      { id: 'med-9', name: 'Hand sanitiser', checked: false, recheckDays: RECHECK_PERIODS.medical },
-    ],
-  },
-  {
-    id: 'tools',
-    name: 'Tools & Equipment',
-    icon: 'handyman',
-    items: [
-      { id: 'tool-1', name: 'Torch/flashlight with extra batteries', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'tool-2', name: 'Battery-powered or crank radio', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'tool-3', name: 'Phone charger and power bank', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'tool-4', name: 'Whistle (for signalling)', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'tool-5', name: 'Multi-tool or basic tool kit', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'tool-6', name: 'Duct tape', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'tool-7', name: 'Wrench (for turning off utilities)', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'tool-8', name: 'Work gloves', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-    ],
-  },
-  {
-    id: 'shelter',
-    name: 'Shelter & Warmth',
-    icon: 'home',
-    items: [
-      { id: 'shelter-1', name: 'Emergency blankets or sleeping bags', checked: false, recheckDays: RECHECK_PERIODS.clothing },
-      { id: 'shelter-2', name: 'Tarpaulin or plastic sheeting', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'shelter-3', name: 'Warm clothing for each family member', checked: false, recheckDays: RECHECK_PERIODS.clothing },
-      { id: 'shelter-4', name: 'Sturdy shoes', checked: false, recheckDays: RECHECK_PERIODS.clothing },
-      { id: 'shelter-5', name: 'Rain gear', checked: false, recheckDays: RECHECK_PERIODS.clothing },
-      { id: 'shelter-6', name: 'Tent (if available)', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-    ],
-  },
-  {
-    id: 'documents',
-    name: 'Documents & Money',
-    icon: 'description',
-    items: [
-      { id: 'doc-1', name: 'Copies of important documents (in waterproof bag)', description: 'ID, insurance, medical records, property deeds', checked: false, recheckDays: RECHECK_PERIODS.documents },
-      { id: 'doc-2', name: 'Cash in small denominations', checked: false, recheckDays: RECHECK_PERIODS.documents },
-      { id: 'doc-3', name: 'Emergency contact list', checked: false, recheckDays: RECHECK_PERIODS.documents },
-      { id: 'doc-4', name: 'Local area map', checked: false, recheckDays: RECHECK_PERIODS.documents },
-      { id: 'doc-5', name: 'USB drive with digital copies of documents', checked: false, recheckDays: RECHECK_PERIODS.documents },
-    ],
-  },
-  {
-    id: 'hygiene',
-    name: 'Hygiene & Sanitation',
-    icon: 'sanitizer',
-    items: [
-      { id: 'hyg-1', name: 'Toilet paper', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'hyg-2', name: 'Wet wipes', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'hyg-3', name: 'Rubbish bags', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'hyg-4', name: 'Bucket with lid (emergency toilet)', checked: false, recheckDays: RECHECK_PERIODS.equipment },
-      { id: 'hyg-5', name: 'Soap and shampoo', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'hyg-6', name: 'Toothbrush and toothpaste', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'hyg-7', name: 'Feminine hygiene products', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-      { id: 'hyg-8', name: 'Nappies (if needed)', checked: false, recheckDays: RECHECK_PERIODS.perishable },
-    ],
-  },
-]
 
 function getItemStatus(item: ChecklistItem): ItemStatus {
   if (!item.checked || !item.lastChecked) {
@@ -152,51 +58,180 @@ function formatDate(dateStr: string): string {
 }
 
 export default function ChecklistPage() {
-  const [checklist, setChecklist] = useState<ChecklistCategory[]>(defaultChecklist)
-  const [expandedCategories, setExpandedCategories] = useState<string[]>(defaultChecklist.map(c => c.id))
-  const [isLoaded, setIsLoaded] = useState(false)
+  const { user } = useAuth()
+  const { activeCommunity } = useCommunity()
 
-  // Load checklist from localStorage on mount
-  useEffect(() => {
+  const [checklist, setChecklist] = useState<ChecklistCategory[]>([])
+  const [expandedCategories, setExpandedCategories] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([])
+  const [profileExtended, setProfileExtended] = useState<ProfileExtended | null>(null)
+  const [responsePlans, setResponsePlans] = useState<ResponsePlanSupplies[]>([])
+  const [showPersonalizationInfo, setShowPersonalizationInfo] = useState(false)
+
+  // Load stored checklist state from localStorage
+  const loadStoredData = useCallback((): StoredChecklistData | null => {
     try {
       const stored = localStorage.getItem(CHECKLIST_STORAGE_KEY)
       if (stored) {
-        const parsed = JSON.parse(stored) as ChecklistCategory[]
-        // Merge with defaults to ensure new items are added
-        const merged = defaultChecklist.map(defaultCat => {
-          const storedCat = parsed.find(c => c.id === defaultCat.id)
-          if (!storedCat) return defaultCat
-
-          return {
-            ...defaultCat,
-            items: defaultCat.items.map(defaultItem => {
-              const storedItem = storedCat.items.find(i => i.id === defaultItem.id)
-              if (!storedItem) return defaultItem
-              return {
-                ...defaultItem,
-                checked: storedItem.checked,
-                ...(storedItem.lastChecked && { lastChecked: storedItem.lastChecked }),
-              }
-            }),
-          }
-        })
-        setChecklist(merged)
+        return JSON.parse(stored)
       }
-    } catch {
-      // Ignore localStorage errors, use defaults
-    }
-    setIsLoaded(true)
-  }, [])
-
-  // Save to localStorage when checklist changes
-  useEffect(() => {
-    if (!isLoaded) return
-    try {
-      localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(checklist))
     } catch {
       // Ignore localStorage errors
     }
-  }, [checklist, isLoaded])
+    return null
+  }, [])
+
+  // Save checklist state to localStorage
+  const saveStoredData = useCallback((categories: ChecklistCategory[]) => {
+    try {
+      const items: Record<string, { checked: boolean; lastChecked?: string }> = {}
+      for (const category of categories) {
+        for (const item of category.items) {
+          if (item.checked && item.lastChecked) {
+            items[item.id] = {
+              checked: item.checked,
+              lastChecked: item.lastChecked,
+            }
+          }
+        }
+      }
+      const data: StoredChecklistData = {
+        version: 2,
+        items,
+        lastUpdated: new Date().toISOString(),
+      }
+      localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(data))
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [])
+
+  // Apply stored data to generated checklist
+  const applyStoredData = useCallback(
+    (categories: ChecklistCategory[], storedData: StoredChecklistData | null): ChecklistCategory[] => {
+      if (!storedData) return categories
+
+      return categories.map(category => ({
+        ...category,
+        items: category.items.map(item => {
+          const stored = storedData.items[item.id]
+          if (stored && stored.lastChecked) {
+            return {
+              ...item,
+              checked: stored.checked,
+              lastChecked: stored.lastChecked,
+            }
+          }
+          return item
+        }),
+      }))
+    },
+    []
+  )
+
+  // Fetch user profile and household data
+  const fetchUserData = useCallback(async () => {
+    if (!user) return
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('notification_preferences')
+        .eq('id', user.id)
+        .single()
+
+      if (profile?.notification_preferences) {
+        const extended = profile.notification_preferences as ProfileExtended
+        setProfileExtended(extended)
+        setHouseholdMembers(extended.household_members || [])
+      }
+    } catch (err) {
+      console.error('Error fetching user profile:', err)
+    }
+  }, [user])
+
+  // Fetch community response plans
+  const fetchResponsePlans = useCallback(async () => {
+    if (!activeCommunity) {
+      setResponsePlans([])
+      return
+    }
+
+    try {
+      const { data: guides } = await (supabase
+        .from('community_guides' as 'profiles')
+        .select('*')
+        .eq('community_id', activeCommunity.id)
+        .eq('is_active', true) as unknown as Promise<{ data: CommunityGuide[] | null }>)
+
+      if (guides && guides.length > 0) {
+        const plans: ResponsePlanSupplies[] = guides.map(guide => {
+          // Get supplies from guide or fallback to template
+          let supplies: string[] = []
+          const guideAny = guide as unknown as { supplies?: string[]; guide_type?: string }
+
+          if (guideAny.supplies && Array.isArray(guideAny.supplies)) {
+            supplies = guideAny.supplies
+          } else {
+            // Get from template
+            const template = guideTemplates.find(t => t.type === guideAny.guide_type)
+            if (template) {
+              supplies = template.supplies
+            }
+          }
+
+          // Get the template for name and icon
+          const template = guideTemplates.find(t => t.type === guideAny.guide_type)
+
+          return {
+            planName: template?.name || guideAny.guide_type || 'Response Plan',
+            planType: guideAny.guide_type || 'general',
+            planIcon: template?.icon || 'emergency',
+            supplies,
+          }
+        })
+
+        setResponsePlans(plans)
+      }
+    } catch (err) {
+      console.error('Error fetching response plans:', err)
+    }
+  }, [activeCommunity])
+
+  // Generate and load checklist
+  useEffect(() => {
+    const loadChecklist = async () => {
+      setIsLoading(true)
+
+      await Promise.all([fetchUserData(), fetchResponsePlans()])
+
+      setIsLoading(false)
+    }
+
+    loadChecklist()
+  }, [fetchUserData, fetchResponsePlans])
+
+  // Generate checklist when data changes
+  useEffect(() => {
+    if (isLoading) return
+
+    const generated = generateDynamicChecklist(householdMembers, profileExtended, responsePlans)
+    const storedData = loadStoredData()
+    const withStoredData = applyStoredData(generated, storedData)
+
+    setChecklist(withStoredData)
+
+    // Expand all categories by default
+    setExpandedCategories(generated.map(c => c.id))
+  }, [isLoading, householdMembers, profileExtended, responsePlans, loadStoredData, applyStoredData])
+
+  // Save when checklist changes
+  useEffect(() => {
+    if (checklist.length > 0) {
+      saveStoredData(checklist)
+    }
+  }, [checklist, saveStoredData])
 
   const toggleItem = (categoryId: string, itemId: string) => {
     setChecklist(prev =>
@@ -289,9 +324,20 @@ export default function ChecklistPage() {
     return { warnings, overdue }
   }
 
+  // Get personalization summary
+  const summary = getChecklistSummary(householdMembers, profileExtended, responsePlans)
+
   const progress = getTotalProgress()
   const progressPercent = progress.total > 0 ? Math.round((progress.checked / progress.total) * 100) : 0
   const alerts = getAlertCounts()
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <span className="material-icons animate-spin text-4xl text-primary">sync</span>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -301,6 +347,116 @@ export default function ChecklistPage() {
         <p className="mt-1 text-muted-foreground">
           Track your emergency supplies and ensure your household is prepared.
         </p>
+      </div>
+
+      {/* Personalization Banner */}
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-4">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+              <span className="material-icons text-xl text-primary">auto_awesome</span>
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Personalized for Your Household</h3>
+              <p className="text-sm text-muted-foreground">
+                This checklist is customized based on {summary.householdAnalysis.totalPeople} household member{summary.householdAnalysis.totalPeople !== 1 ? 's' : ''}
+                {summary.responsePlanCount > 0 && `, ${summary.responsePlanCount} active response plan${summary.responsePlanCount !== 1 ? 's' : ''}`}
+                {summary.hasSpecialNeeds && ', and special needs requirements'}.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowPersonalizationInfo(!showPersonalizationInfo)}
+            className="text-sm text-primary hover:text-primary/80 flex items-center gap-1"
+          >
+            <span className="material-icons text-lg">{showPersonalizationInfo ? 'expand_less' : 'expand_more'}</span>
+            Details
+          </button>
+        </div>
+
+        {showPersonalizationInfo && (
+          <div className="mt-4 pt-4 border-t border-primary/20 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Household breakdown */}
+            <div className="rounded-lg bg-background/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-icons text-lg text-primary">family_restroom</span>
+                <span className="font-medium text-sm">Household</span>
+              </div>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {summary.householdAnalysis.adultCount > 0 && (
+                  <p>{summary.householdAnalysis.adultCount} adult{summary.householdAnalysis.adultCount !== 1 ? 's' : ''}</p>
+                )}
+                {summary.householdAnalysis.elderlyCount > 0 && (
+                  <p>{summary.householdAnalysis.elderlyCount} elderly (65+)</p>
+                )}
+                {summary.householdAnalysis.teenCount > 0 && (
+                  <p>{summary.householdAnalysis.teenCount} teen{summary.householdAnalysis.teenCount !== 1 ? 's' : ''}</p>
+                )}
+                {summary.householdAnalysis.childCount > 0 && (
+                  <p>{summary.householdAnalysis.childCount} child{summary.householdAnalysis.childCount !== 1 ? 'ren' : ''} (5-12)</p>
+                )}
+                {summary.householdAnalysis.toddlerCount > 0 && (
+                  <p>{summary.householdAnalysis.toddlerCount} toddler{summary.householdAnalysis.toddlerCount !== 1 ? 's' : ''}</p>
+                )}
+                {summary.householdAnalysis.infantCount > 0 && (
+                  <p>{summary.householdAnalysis.infantCount} infant{summary.householdAnalysis.infantCount !== 1 ? 's' : ''}</p>
+                )}
+              </div>
+            </div>
+
+            {/* Response plans */}
+            <div className="rounded-lg bg-background/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-icons text-lg text-orange-500">emergency</span>
+                <span className="font-medium text-sm">Response Plans</span>
+              </div>
+              {responsePlans.length > 0 ? (
+                <div className="space-y-1 text-xs text-muted-foreground">
+                  {responsePlans.map((plan, i) => (
+                    <p key={i} className="flex items-center gap-1">
+                      <span className="material-icons text-xs">{plan.planIcon}</span>
+                      {plan.planName}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No active response plans.
+                  {activeCommunity ? ' Check your community guides.' : ' Join a community to see response plans.'}
+                </p>
+              )}
+            </div>
+
+            {/* Special needs */}
+            <div className="rounded-lg bg-background/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-icons text-lg text-blue-500">accessible</span>
+                <span className="font-medium text-sm">Special Needs</span>
+              </div>
+              {summary.hasSpecialNeeds ? (
+                <p className="text-xs text-muted-foreground">
+                  Items added based on your profile&apos;s accessibility settings.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  No special needs items. Update your profile to add accessibility requirements.
+                </p>
+              )}
+            </div>
+
+            {/* Item counts */}
+            <div className="rounded-lg bg-background/50 p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="material-icons text-lg text-green-500">inventory_2</span>
+                <span className="font-medium text-sm">Total Items</span>
+              </div>
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p>{summary.totalItems} total items</p>
+                <p>{summary.personalizedItems} personalized items</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Alert Summary */}
@@ -460,13 +616,35 @@ export default function ChecklistPage() {
                               className="mt-0.5 h-5 w-5 rounded border-border text-primary focus:ring-primary"
                             />
                             <div className="flex-1">
-                              <span
-                                className={`text-sm ${
-                                  !item.checked ? 'text-foreground' : 'text-foreground'
-                                }`}
-                              >
-                                {item.name}
-                              </span>
+                              <div className="flex items-start gap-2">
+                                <span
+                                  className={`text-sm ${
+                                    !item.checked ? 'text-foreground' : 'text-foreground'
+                                  }`}
+                                >
+                                  {item.name}
+                                </span>
+                                {item.priority === 'essential' && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300">
+                                    Essential
+                                  </span>
+                                )}
+                                {item.source === 'household' && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                    Household
+                                  </span>
+                                )}
+                                {item.source === 'special_needs' && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                    Special Needs
+                                  </span>
+                                )}
+                                {item.source === 'response_plan' && (
+                                  <span className="text-xs px-1.5 py-0.5 rounded bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300">
+                                    Response Plan
+                                  </span>
+                                )}
+                              </div>
                               {item.description && (
                                 <p className="mt-0.5 text-xs text-muted-foreground">
                                   {item.description}
@@ -555,6 +733,10 @@ export default function ChecklistPage() {
           <li className="flex items-start gap-2">
             <span className="material-icons text-sm text-primary">arrow_right</span>
             Keep a basic kit in your car as well as at home.
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="material-icons text-sm text-primary">arrow_right</span>
+            Update your <a href="/profile" className="text-primary hover:underline">profile</a> and <a href="/profile" className="text-primary hover:underline">household members</a> to keep this checklist personalized.
           </li>
         </ul>
       </div>

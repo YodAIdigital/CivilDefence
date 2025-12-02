@@ -24,6 +24,7 @@ interface MemberSearchFilterProps {
   members: CommunityMemberWithProfile[]
   onFilteredMembersChange: (members: CommunityMemberWithProfile[]) => void
   className?: string
+  inviteButton?: React.ReactNode
 }
 
 type FilterCategory = 'skills' | 'disabilities' | 'equipment' | 'roles'
@@ -48,6 +49,7 @@ export function MemberSearchFilter({
   members,
   onFilteredMembersChange,
   className = '',
+  inviteButton,
 }: MemberSearchFilterProps) {
   const [filters, setFilters] = useState<ActiveFilters>(initialFilters)
   const [showFilters, setShowFilters] = useState(false)
@@ -177,9 +179,9 @@ export function MemberSearchFilter({
 
   return (
     <div className={`space-y-4 ${className}`}>
-      {/* Search Bar and Filter Toggle */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+      {/* Search Bar, Filter Toggle, and Invite Button */}
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+        <div className="relative flex-1 min-w-0 order-1 w-full sm:w-auto">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
@@ -197,19 +199,22 @@ export function MemberSearchFilter({
             </button>
           )}
         </div>
-        <Button
-          variant={showFilters ? 'default' : 'outline'}
-          onClick={() => setShowFilters(!showFilters)}
-          className="gap-2 shrink-0"
-        >
-          <Filter className="h-4 w-4" />
-          Filters
-          {activeFilterCount > 0 && (
-            <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary-foreground text-xs text-primary">
-              {activeFilterCount}
-            </span>
-          )}
-        </Button>
+        <div className="flex items-center gap-2 order-2 sm:order-2 ml-auto sm:ml-0">
+          <Button
+            variant={showFilters ? 'default' : 'outline'}
+            onClick={() => setShowFilters(!showFilters)}
+            className="gap-2 shrink-0"
+          >
+            <Filter className="h-4 w-4" />
+            <span className="hidden sm:inline">Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary-foreground text-xs text-primary">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
+          {inviteButton}
+        </div>
       </div>
 
       {/* Filter Panel */}
@@ -495,7 +500,7 @@ export function MemberSearchFilter({
   )
 }
 
-// Helper component to display member's extended info (skills, disabilities, equipment)
+// Helper component to display member's extended info (skills, disabilities, equipment, household)
 export function MemberExtendedInfo({ profile }: { profile: Profile | null }) {
   if (!profile) return null
 
@@ -505,54 +510,95 @@ export function MemberExtendedInfo({ profile }: { profile: Profile | null }) {
   const hasSkills = extended.skills && extended.skills.length > 0
   const hasDisabilities = extended.disabilities && extended.disabilities.length > 0
   const hasEquipment = extended.equipment && extended.equipment.length > 0
+  const hasHousehold = extended.household_members && extended.household_members.length > 0
 
-  if (!hasSkills && !hasDisabilities && !hasEquipment) return null
+  if (!hasSkills && !hasDisabilities && !hasEquipment && !hasHousehold) return null
 
   return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      {hasSkills &&
-        extended.skills?.map((skill) => {
-          const label = SKILL_OPTIONS.find((s) => s.value === skill)?.label || skill
-          return (
-            <span
-              key={skill}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-              title={`Skill: ${label}`}
-            >
-              <span className="material-icons text-xs mr-0.5">medical_services</span>
-              {label}
-            </span>
-          )
-        })}
-      {hasDisabilities &&
-        extended.disabilities?.map((disability) => {
-          const label =
-            DISABILITY_OPTIONS.find((d) => d.value === disability)?.label || disability
-          return (
-            <span
-              key={disability}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
-              title={`Need: ${label}`}
-            >
-              <span className="material-icons text-xs mr-0.5">accessible</span>
-              {label}
-            </span>
-          )
-        })}
-      {hasEquipment &&
-        extended.equipment?.map((equip) => {
-          const label = EQUIPMENT_OPTIONS.find((e) => e.value === equip)?.label || equip
-          return (
-            <span
-              key={equip}
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-              title={`Equipment: ${label}`}
-            >
-              <span className="material-icons text-xs mr-0.5">construction</span>
-              {label}
-            </span>
-          )
-        })}
+    <div className="mt-2 space-y-2">
+      {/* Skills, Disabilities, Equipment tags */}
+      {(hasSkills || hasDisabilities || hasEquipment) && (
+        <div className="flex flex-wrap gap-1">
+          {hasSkills &&
+            extended.skills?.map((skill) => {
+              const label = SKILL_OPTIONS.find((s) => s.value === skill)?.label || skill
+              return (
+                <span
+                  key={skill}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
+                  title={`Skill: ${label}`}
+                >
+                  <span className="material-icons text-xs mr-0.5">medical_services</span>
+                  {label}
+                </span>
+              )
+            })}
+          {hasDisabilities &&
+            extended.disabilities?.map((disability) => {
+              const label =
+                DISABILITY_OPTIONS.find((d) => d.value === disability)?.label || disability
+              return (
+                <span
+                  key={disability}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300"
+                  title={`Need: ${label}`}
+                >
+                  <span className="material-icons text-xs mr-0.5">accessible</span>
+                  {label}
+                </span>
+              )
+            })}
+          {hasEquipment &&
+            extended.equipment?.map((equip) => {
+              const label = EQUIPMENT_OPTIONS.find((e) => e.value === equip)?.label || equip
+              return (
+                <span
+                  key={equip}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
+                  title={`Equipment: ${label}`}
+                >
+                  <span className="material-icons text-xs mr-0.5">construction</span>
+                  {label}
+                </span>
+              )
+            })}
+        </div>
+      )}
+
+      {/* Household Members */}
+      {hasHousehold && (
+        <div className="rounded-lg bg-muted/50 p-2">
+          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground mb-1.5">
+            <span className="material-icons text-sm">family_restroom</span>
+            Household Members ({extended.household_members?.length})
+          </div>
+          <div className="space-y-1">
+            {extended.household_members?.map((member) => (
+              <div
+                key={member.id}
+                className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs"
+              >
+                <span className="font-medium">{member.name}</span>
+                {member.age && (
+                  <span className="text-muted-foreground">Age: {member.age}</span>
+                )}
+                {member.contact_number && (
+                  <span className="text-muted-foreground flex items-center gap-0.5">
+                    <span className="material-icons text-xs">phone</span>
+                    {member.contact_number}
+                  </span>
+                )}
+                {member.email && (
+                  <span className="text-muted-foreground flex items-center gap-0.5">
+                    <span className="material-icons text-xs">email</span>
+                    {member.email}
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -21,9 +21,10 @@ function isMobileApp(): boolean {
 
 interface VersionDisplayProps {
   collapsed?: boolean
+  inline?: boolean
 }
 
-export function VersionDisplay({ collapsed = false }: VersionDisplayProps) {
+export function VersionDisplay({ collapsed = false, inline = false }: VersionDisplayProps) {
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false)
   const [isChecking, setIsChecking] = useState(false)
   const [showOnMobile, setShowOnMobile] = useState(false)
@@ -83,9 +84,13 @@ export function VersionDisplay({ collapsed = false }: VersionDisplayProps) {
 
   if (collapsed) {
     return (
-      <div className="flex justify-center py-2">
-        <span className="text-[10px] text-muted-foreground">v{currentVersion}</span>
-      </div>
+      <span className="text-[10px] text-muted-foreground">v{currentVersion}</span>
+    )
+  }
+
+  if (inline) {
+    return (
+      <span className="text-xs text-muted-foreground">Version {currentVersion}</span>
     )
   }
 
