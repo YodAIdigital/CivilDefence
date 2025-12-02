@@ -13,6 +13,7 @@ import { GroupsManager } from '@/components/community/groups-manager'
 import { RegionEditor } from '@/components/maps/region-editor'
 import { MemberSearchFilter } from '@/components/community/member-search-filter'
 import { MemberProfileCard } from '@/components/community/member-profile-card'
+import { CustomRecipientSelector } from '@/components/community/custom-recipient-selector'
 import { UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown, Webhook, Copy, Trash2, Edit2, ToggleLeft, ToggleRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,6 +36,14 @@ interface PendingInvitation {
   status: string
   created_at: string
   expires_at: string
+}
+
+interface SelectedRecipient {
+  id: string // user_id for members, temporary id for external
+  name: string
+  email: string
+  role?: CommunityRole
+  isExternal?: boolean
 }
 
 type TabType = 'alerts' | 'members' | 'events' | 'visibility'
@@ -159,7 +168,7 @@ export default function CommunityManagePage() {
   const [alertMessage, setAlertMessage] = useState('')
   const [alertLevel, setAlertLevel] = useState<AlertLevel>('info')
   const [alertRecipientGroup, setAlertRecipientGroup] = useState<RecipientGroup>('members')
-  const [alertSelectedMembers, setAlertSelectedMembers] = useState<string[]>([])
+  const [alertSelectedRecipients, setAlertSelectedRecipients] = useState<SelectedRecipient[]>([])
   const [alertSelectedGroups, setAlertSelectedGroups] = useState<string[]>([])
   const [communityGroups, setCommunityGroups] = useState<CommunityGroup[]>([])
   const [alertSendEmail, setAlertSendEmail] = useState(true)
@@ -886,14 +895,18 @@ export default function CommunityManagePage() {
       return
     }
 
-    if (alertRecipientGroup === 'specific' && alertSelectedMembers.length === 0) {
-      setError('Please select at least one member')
+    if (alertRecipientGroup === 'specific' && alertSelectedRecipients.length === 0) {
+      setError('Please select at least one recipient')
       return
     }
 
     try {
       setIsSendingAlert(true)
       setError(null)
+
+      // Separate internal members and external recipients
+      const memberRecipients = alertSelectedRecipients.filter(r => !r.isExternal)
+      const externalRecipients = alertSelectedRecipients.filter(r => r.isExternal)
 
       const response = await fetch('/api/community-alert', {
         method: 'POST',
@@ -905,7 +918,10 @@ export default function CommunityManagePage() {
           message: alertMessage,
           alertLevel,
           recipientGroup: alertRecipientGroup,
-          specificMemberIds: alertRecipientGroup === 'specific' ? alertSelectedMembers : undefined,
+          specificMemberIds: alertRecipientGroup === 'specific' ? memberRecipients.map(r => r.id) : undefined,
+          externalRecipients: alertRecipientGroup === 'specific' && externalRecipients.length > 0
+            ? externalRecipients.map(r => ({ name: r.name, email: r.email }))
+            : undefined,
           sendEmail: alertSendEmail,
           sendSms: alertSendSms,
           sendAppAlert: alertSendAppAlert,
@@ -924,7 +940,7 @@ export default function CommunityManagePage() {
       setAlertMessage('')
       setAlertLevel('info')
       setAlertRecipientGroup('members')
-      setAlertSelectedMembers([])
+      setAlertSelectedRecipients([])
       setAlertSelectedGroups([])
       setAlertSendEmail(true)
       setAlertSendSms(false)
@@ -945,13 +961,6 @@ export default function CommunityManagePage() {
     }
   }
 
-  const toggleMemberSelection = (userId: string) => {
-    setAlertSelectedMembers(prev =>
-      prev.includes(userId)
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    )
-  }
 
   const saveContacts = async (newContacts: CommunityContact[]) => {
     if (!community) return
@@ -1424,50 +1433,13 @@ export default function CommunityManagePage() {
                 </div>
               )}
 
-              {/* Member Selection (when specific is selected) */}
+              {/* Custom Recipient Selection (when specific is selected) */}
               {alertRecipientGroup === 'specific' && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Select Members ({alertSelectedMembers.length} selected)
-                  </label>
-                  <div className="border border-border rounded-lg max-h-48 overflow-y-auto">
-                    {members.map((member) => {
-                      const isSelected = alertSelectedMembers.includes(member.user_id)
-                      return (
-                        <button
-                          key={member.id}
-                          onClick={() => toggleMemberSelection(member.user_id)}
-                          className={`w-full flex items-center gap-3 p-3 text-left hover:bg-muted/50 border-b border-border last:border-b-0 ${
-                            isSelected ? 'bg-primary/5' : ''
-                          }`}
-                        >
-                          <div className={`flex h-5 w-5 items-center justify-center rounded border ${
-                            isSelected ? 'bg-primary border-primary' : 'border-border'
-                          }`}>
-                            {isSelected && <CheckCircle className="h-4 w-4 text-primary-foreground" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">
-                              {member.profile?.full_name || member.profile?.email || 'Unknown'}
-                            </p>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {member.profile?.email}
-                            </p>
-                          </div>
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: `${COMMUNITY_ROLE_CONFIG[member.role]?.color}20`,
-                              color: COMMUNITY_ROLE_CONFIG[member.role]?.color
-                            }}
-                          >
-                            {COMMUNITY_ROLE_CONFIG[member.role]?.label}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
+                <CustomRecipientSelector
+                  members={members}
+                  selectedRecipients={alertSelectedRecipients}
+                  onRecipientsChange={setAlertSelectedRecipients}
+                />
               )}
 
               {/* Alert Title */}

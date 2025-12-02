@@ -7,6 +7,11 @@ import { sendPushNotificationToMany, getAlertLevelEmoji, type PushSubscriptionDa
 type AlertLevel = 'info' | 'warning' | 'danger'
 type RecipientGroup = 'admin' | 'team' | 'members' | 'specific'
 
+interface ExternalRecipient {
+  name: string
+  email: string
+}
+
 interface AlertRequest {
   communityId: string
   senderId: string
@@ -15,6 +20,7 @@ interface AlertRequest {
   alertLevel: AlertLevel
   recipientGroup: RecipientGroup
   specificMemberIds?: string[]
+  externalRecipients?: ExternalRecipient[]
   sendEmail: boolean
   sendSms: boolean
   sendAppAlert: boolean
@@ -33,6 +39,7 @@ export async function POST(request: NextRequest) {
       alertLevel,
       recipientGroup,
       specificMemberIds,
+      externalRecipients,
       sendEmail: shouldSendEmail,
       sendSms: shouldSendSms,
       sendAppAlert,
@@ -187,7 +194,10 @@ export async function POST(request: NextRequest) {
     }
     console.log('=== END RECIPIENT FILTERING DEBUG ===')
 
-    if (recipientUserIds.length === 0) {
+    const externalRecipientsCount = externalRecipients?.length || 0
+    const totalRecipients = recipientUserIds.length + externalRecipientsCount
+
+    if (totalRecipients === 0) {
       return NextResponse.json(
         { error: 'No recipients found for the selected group' },
         { status: 400 }
@@ -217,7 +227,7 @@ export async function POST(request: NextRequest) {
         sent_via_email: shouldSendEmail,
         sent_via_sms: shouldSendSms,
         sent_via_app: sendAppAlert,
-        recipient_count: recipientUserIds.length,
+        recipient_count: totalRecipients,
         recipient_group: recipientGroup,
       })
       .select('id')
@@ -266,7 +276,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send emails if requested
-    if (shouldSendEmail && profiles && profiles.length > 0) {
+    if (shouldSendEmail) {
       const emailTemplate = getCommunityAlertEmail({
         communityName: community.name,
         senderName: senderProfile.full_name || senderProfile.email,
@@ -275,24 +285,50 @@ export async function POST(request: NextRequest) {
         message,
       })
 
-      // Send emails to all recipients
-      for (const profile of profiles) {
-        if (profile.email) {
-          try {
-            const success = await sendEmail({
-              to: profile.email,
-              subject: emailTemplate.subject,
-              html: emailTemplate.html,
-            })
+      // Send emails to member recipients
+      if (profiles && profiles.length > 0) {
+        for (const profile of profiles) {
+          if (profile.email) {
+            try {
+              const success = await sendEmail({
+                to: profile.email,
+                subject: emailTemplate.subject,
+                html: emailTemplate.html,
+              })
 
-            if (success) {
-              emailsSent++
-            } else {
+              if (success) {
+                emailsSent++
+              } else {
+                emailErrors.push(profile.email)
+              }
+            } catch (err) {
+              console.error(`Failed to send email to ${profile.email}:`, err)
               emailErrors.push(profile.email)
             }
-          } catch (err) {
-            console.error(`Failed to send email to ${profile.email}:`, err)
-            emailErrors.push(profile.email)
+          }
+        }
+      }
+
+      // Send emails to external recipients
+      if (externalRecipients && externalRecipients.length > 0) {
+        for (const recipient of externalRecipients) {
+          if (recipient.email) {
+            try {
+              const success = await sendEmail({
+                to: recipient.email,
+                subject: emailTemplate.subject,
+                html: emailTemplate.html,
+              })
+
+              if (success) {
+                emailsSent++
+              } else {
+                emailErrors.push(recipient.email)
+              }
+            } catch (err) {
+              console.error(`Failed to send email to ${recipient.email}:`, err)
+              emailErrors.push(recipient.email)
+            }
           }
         }
       }
@@ -419,7 +455,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       alertId,
-      recipientCount: recipientUserIds.length,
+      recipientCount: totalRecipients,
       emailsSent,
       smsSent,
       pushSent,
