@@ -16,8 +16,8 @@ import { MemberProfileCard } from '@/components/community/member-profile-card'
 import { UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown, Webhook, Copy, Trash2, Edit2, ToggleLeft, ToggleRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon, CommunityAlertRule, AlertTriggerType, RuleRecipientGroup, CommunityGroup } from '@/types/database'
-import { COMMUNITY_ROLE_CONFIG, ALERT_RULE_LEVEL_CONFIG, TRIGGER_TYPE_CONFIG, RULE_RECIPIENT_CONFIG } from '@/types/database'
+import type { Community, Profile, CommunityRole, CommunityContact, CommunityMapPoint, CreateCommunityMapPoint, UpdateCommunityMapPoint, Json, RegionPolygon, CommunityAlertRule, RuleRecipientGroup, CommunityGroup } from '@/types/database'
+import { COMMUNITY_ROLE_CONFIG, ALERT_RULE_LEVEL_CONFIG, RULE_RECIPIENT_CONFIG } from '@/types/database'
 
 interface CommunityMemberWithProfile {
   id: string
@@ -177,7 +177,6 @@ export default function CommunityManagePage() {
   // Rule form state
   const [ruleName, setRuleName] = useState('')
   const [ruleDescription, setRuleDescription] = useState('')
-  const [ruleTriggerType, setRuleTriggerType] = useState<AlertTriggerType>('webhook')
   const [ruleAlertTitle, setRuleAlertTitle] = useState('')
   const [ruleAlertMessage, setRuleAlertMessage] = useState('')
   const [ruleAlertLevel, setRuleAlertLevel] = useState<'info' | 'warning' | 'danger'>('info')
@@ -191,6 +190,7 @@ export default function CommunityManagePage() {
   // Collapsible section states - all collapsed by default
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
     'send-alert': true,
+    'alert-rules': true,
     'alert-history': true,
     'rules-list': true,
     'create-rule': true,
@@ -401,12 +401,20 @@ export default function CommunityManagePage() {
     try {
       setIsLoadingRules(true)
       const response = await fetch(`/api/alert-rules?communityId=${communityId}&userId=${user.id}`)
+
+      if (!response.ok) {
+        // API might not be available or table doesn't exist yet
+        // Silently fail - rules feature might not be deployed yet
+        return
+      }
+
       const data = await response.json()
 
-      if (response.ok && data.rules) {
+      if (data.rules) {
         setAlertRules(data.rules)
       }
     } catch (err) {
+      // Silently fail - rules feature might not be deployed yet
       console.error('Error fetching alert rules:', err)
     } finally {
       setIsLoadingRules(false)
@@ -424,7 +432,6 @@ export default function CommunityManagePage() {
   const resetRuleForm = () => {
     setRuleName('')
     setRuleDescription('')
-    setRuleTriggerType('webhook')
     setRuleAlertTitle('')
     setRuleAlertMessage('')
     setRuleAlertLevel('info')
@@ -442,7 +449,6 @@ export default function CommunityManagePage() {
     setEditingRule(rule)
     setRuleName(rule.name)
     setRuleDescription(rule.description || '')
-    setRuleTriggerType(rule.trigger_type)
     setRuleAlertTitle(rule.alert_title)
     setRuleAlertMessage(rule.alert_message)
     setRuleAlertLevel(rule.alert_level)
@@ -485,6 +491,7 @@ export default function CommunityManagePage() {
             alertLevel: ruleAlertLevel,
             recipientGroup: ruleRecipientGroup,
             specificMemberIds: ruleRecipientGroup === 'specific' ? ruleSelectedMembers : [],
+            targetGroupIds: ruleRecipientGroup === 'groups' ? ruleSelectedGroups : [],
             sendEmail: ruleSendEmail,
             sendSms: ruleSendSms,
             sendAppNotification: ruleSendAppNotification,
@@ -507,12 +514,12 @@ export default function CommunityManagePage() {
             userId: user?.id,
             name: ruleName,
             description: ruleDescription,
-            triggerType: ruleTriggerType,
             alertTitle: ruleAlertTitle,
             alertMessage: ruleAlertMessage,
             alertLevel: ruleAlertLevel,
             recipientGroup: ruleRecipientGroup,
             specificMemberIds: ruleRecipientGroup === 'specific' ? ruleSelectedMembers : [],
+            targetGroupIds: ruleRecipientGroup === 'groups' ? ruleSelectedGroups : [],
             sendEmail: ruleSendEmail,
             sendSms: ruleSendSms,
             sendAppNotification: ruleSendAppNotification,
@@ -1587,88 +1594,6 @@ export default function CommunityManagePage() {
             </div>
           </div>
 
-          {/* Alert History Section */}
-          <div className="rounded-xl border border-border bg-card">
-            <button
-              onClick={() => toggleSection('alert-history')}
-              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
-            >
-              <div className="text-left">
-                <h2 className="flex items-center gap-2 text-lg font-semibold">
-                  <span className="material-icons text-muted-foreground">history</span>
-                  Alert History
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  Previously sent alerts to this community.
-                </p>
-              </div>
-              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['alert-history'] ? '-rotate-90' : ''}`} />
-            </button>
-            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['alert-history'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
-            <div className="divide-y divide-border">
-              {alertHistory.length === 0 ? (
-                <div className="p-8 text-center">
-                  <span className="material-icons text-4xl text-muted-foreground">notifications_none</span>
-                  <p className="mt-2 text-muted-foreground">No alerts have been sent yet.</p>
-                </div>
-              ) : (
-                alertHistory.map((alert) => {
-                  const config = ALERT_LEVEL_CONFIG[alert.level as AlertLevel] || ALERT_LEVEL_CONFIG.info
-                  const IconComponent = config.icon
-                  const alertDate = new Date(alert.created_at)
-
-                  return (
-                    <div key={alert.id} className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.bgColor}`}>
-                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="font-semibold">{alert.title}</h4>
-                            <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {alertDate.toLocaleDateString()} {alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{alert.content}</p>
-                          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
-                            <span className="text-muted-foreground">
-                              Sent by: <span className="font-medium text-foreground">{alert.author?.full_name || alert.author?.email || 'Unknown'}</span>
-                            </span>
-                            <span className="text-muted-foreground">
-                              To: <span className="font-medium text-foreground">{alert.recipient_count} recipient{alert.recipient_count !== 1 ? 's' : ''}</span>
-                            </span>
-                            <div className="flex items-center gap-2">
-                              {alert.sent_via_app && (
-                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
-                                  <Bell className="h-3 w-3" />
-                                  App
-                                </span>
-                              )}
-                              {alert.sent_via_email && (
-                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
-                                  <Mail className="h-3 w-3" />
-                                  {alert.email_sent_count > 0 ? `${alert.email_sent_count} emails` : 'Email'}
-                                </span>
-                              )}
-                              {alert.sent_via_sms && (
-                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
-                                  <MessageSquare className="h-3 w-3" />
-                                  {alert.sms_sent_count > 0 ? `${alert.sms_sent_count} SMS` : 'SMS'}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-            </div>
-          </div>
-
           {/* Alert Rules Section - under alerts tab */}
           <div className="rounded-xl border border-border bg-card">
             <button
@@ -1722,38 +1647,6 @@ export default function CommunityManagePage() {
                           rows={2}
                           className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                         />
-                      </div>
-
-                      {/* Trigger Type */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">Trigger Type</label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {(['webhook', 'email'] as AlertTriggerType[]).map((type) => {
-                            const config = TRIGGER_TYPE_CONFIG[type]
-                            const isSelected = ruleTriggerType === type
-                            return (
-                              <button
-                                key={type}
-                                onClick={() => setRuleTriggerType(type)}
-                                className={`p-3 rounded-lg border text-left transition-all ${
-                                  isSelected
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/30'
-                                }`}
-                              >
-                                <div className="flex items-center gap-2">
-                                  {type === 'webhook' ? (
-                                    <Webhook className="h-4 w-4 text-purple-500" />
-                                  ) : (
-                                    <Mail className="h-4 w-4 text-blue-500" />
-                                  )}
-                                  <span className="font-medium text-sm">{config.label}</span>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">{config.description}</p>
-                              </button>
-                            )
-                          })}
-                        </div>
                       </div>
 
                       {/* Alert Level */}
@@ -2000,11 +1893,6 @@ export default function CommunityManagePage() {
                               <div className="flex items-start justify-between gap-3">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 mb-1">
-                                    {rule.trigger_type === 'webhook' ? (
-                                      <Webhook className="h-3 w-3 text-purple-500" />
-                                    ) : (
-                                      <Mail className="h-3 w-3 text-blue-500" />
-                                    )}
                                     <h4 className="font-medium text-sm truncate">{rule.name}</h4>
                                     {!rule.is_active && (
                                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
@@ -2036,9 +1924,11 @@ export default function CommunityManagePage() {
                                     <span>{rule.trigger_count} triggers</span>
                                   </div>
 
-                                  {/* Webhook URL (for webhook triggers) */}
-                                  {rule.trigger_type === 'webhook' && (
-                                    <div className="mt-2 flex items-center gap-2">
+                                  {/* Triggers - Show both webhook and email */}
+                                  <div className="mt-2 space-y-2">
+                                    {/* Webhook URL */}
+                                    <div className="flex items-center gap-2">
+                                      <Webhook className="h-3 w-3 text-purple-500 shrink-0" />
                                       <code className="text-xs bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">
                                         ...?token={rule.webhook_token.substring(0, 8)}...
                                       </code>
@@ -2051,14 +1941,27 @@ export default function CommunityManagePage() {
                                         <Copy className="h-3 w-3" />
                                       </Button>
                                     </div>
-                                  )}
 
-                                  {/* Email Trigger */}
-                                  {rule.trigger_type === 'email' && rule.trigger_email && (
-                                    <div className="mt-2">
-                                      <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{rule.trigger_email}</code>
-                                    </div>
-                                  )}
+                                    {/* Email Trigger */}
+                                    {rule.trigger_email && (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="h-3 w-3 text-blue-500 shrink-0" />
+                                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded truncate max-w-[200px]">{rule.trigger_email}</code>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          onClick={() => {
+                                            navigator.clipboard.writeText(rule.trigger_email || '')
+                                            setSuccess('Email address copied!')
+                                            setTimeout(() => setSuccess(null), 2000)
+                                          }}
+                                          className="h-6 px-2"
+                                        >
+                                          <Copy className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
 
                                 {/* Actions */}
@@ -2101,10 +2004,93 @@ export default function CommunityManagePage() {
                 {/* Help Text */}
                 <div className="rounded-lg bg-muted/30 p-3 text-xs text-muted-foreground">
                   <p className="font-medium text-foreground mb-1">How Alert Rules Work</p>
-                  <p><strong>Webhook:</strong> Send a POST request to the URL to trigger the alert.</p>
-                  <p><strong>Email:</strong> Forward emails to the trigger address. Use <code className="px-1 py-0.5 rounded bg-muted">[WARNING]</code> or <code className="px-1 py-0.5 rounded bg-muted">[EMERGENCY]</code> in the subject to set alert level.</p>
+                  <p>Each rule provides both webhook and email trigger options:</p>
+                  <p className="mt-1"><strong>Webhook:</strong> Send a POST request to the webhook URL to trigger the alert.</p>
+                  <p className="mt-1"><strong>Email:</strong> Forward emails to the trigger address @civildefence.pro. Use <code className="px-1 py-0.5 rounded bg-muted">[WARNING]</code> or <code className="px-1 py-0.5 rounded bg-muted">[EMERGENCY]</code> in the subject to set alert level.</p>
                 </div>
               </div>
+            </div>
+          </div>
+
+          {/* Alert History Section */}
+          <div className="rounded-xl border border-border bg-card">
+            <button
+              onClick={() => toggleSection('alert-history')}
+              className="w-full border-b border-border p-4 flex items-center justify-between hover:bg-muted/30 transition-colors"
+            >
+              <div className="text-left">
+                <h2 className="flex items-center gap-2 text-lg font-semibold">
+                  <span className="material-icons text-muted-foreground">history</span>
+                  Alert History
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                  Previously sent alerts to this community.
+                </p>
+              </div>
+              <ChevronDown className={`h-5 w-5 text-muted-foreground transition-transform ${collapsedSections['alert-history'] ? '-rotate-90' : ''}`} />
+            </button>
+            <div className={`overflow-hidden transition-all duration-300 ${collapsedSections['alert-history'] ? 'max-h-0' : 'max-h-[2000px]'}`}>
+            <div className="divide-y divide-border">
+              {alertHistory.length === 0 ? (
+                <div className="p-8 text-center">
+                  <span className="material-icons text-4xl text-muted-foreground">notifications_none</span>
+                  <p className="mt-2 text-muted-foreground">No alerts have been sent yet.</p>
+                </div>
+              ) : (
+                alertHistory.map((alert) => {
+                  const config = ALERT_LEVEL_CONFIG[alert.level as AlertLevel] || ALERT_LEVEL_CONFIG.info
+                  const IconComponent = config.icon
+                  const alertDate = new Date(alert.created_at)
+
+                  return (
+                    <div key={alert.id} className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${config.bgColor}`}>
+                          <IconComponent className="h-5 w-5" style={{ color: config.color }} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-semibold">{alert.title}</h4>
+                            <span className="text-xs text-muted-foreground whitespace-nowrap">
+                              {alertDate.toLocaleDateString()} {alertDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{alert.content}</p>
+                          <div className="flex flex-wrap items-center gap-3 mt-2 text-xs">
+                            <span className="text-muted-foreground">
+                              Sent by: <span className="font-medium text-foreground">{alert.author?.full_name || alert.author?.email || 'Unknown'}</span>
+                            </span>
+                            <span className="text-muted-foreground">
+                              To: <span className="font-medium text-foreground">{alert.recipient_count} recipient{alert.recipient_count !== 1 ? 's' : ''}</span>
+                            </span>
+                            <div className="flex items-center gap-2">
+                              {alert.sent_via_app && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300">
+                                  <Bell className="h-3 w-3" />
+                                  App
+                                </span>
+                              )}
+                              {alert.sent_via_email && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300">
+                                  <Mail className="h-3 w-3" />
+                                  {alert.email_sent_count > 0 ? `${alert.email_sent_count} emails` : 'Email'}
+                                </span>
+                              )}
+                              {alert.sent_via_sms && (
+                                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300">
+                                  <MessageSquare className="h-3 w-3" />
+                                  {alert.sms_sent_count > 0 ? `${alert.sms_sent_count} SMS` : 'SMS'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
             </div>
           </div>
         </div>

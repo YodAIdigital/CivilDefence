@@ -81,18 +81,18 @@ export async function POST(request: NextRequest) {
       userId,
       name,
       description,
-      triggerType,
       alertTitle,
       alertMessage,
       alertLevel = 'info',
       recipientGroup = 'members',
       specificMemberIds = [],
+      targetGroupIds = [],
       sendEmail = true,
       sendSms = false,
       sendAppNotification = true,
     } = body
 
-    if (!communityId || !userId || !name || !triggerType || !alertTitle || !alertMessage) {
+    if (!communityId || !userId || !name || !alertTitle || !alertMessage) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -123,32 +123,29 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Generate a trigger email if this is an email trigger
-    let triggerEmail: string | null = null
-    if (triggerType === 'email') {
-      // Generate a unique email address for this rule
-      // Format: alerts-{communityId-first8chars}-{random6chars}@yourdomain.com
-      const randomPart = Math.random().toString(36).substring(2, 8)
-      const communityPart = communityId.substring(0, 8)
-      // This would need to be configured with your actual domain
-      const domain = process.env.ALERT_EMAIL_DOMAIN || 'alerts.civildefence.app'
-      triggerEmail = `alert-${communityPart}-${randomPart}@${domain}`
-    }
+    // Generate both a webhook token and trigger email for this rule
+    // Format: alert-{communityId-first8chars}-{random6chars}@civildefence.pro
+    const randomPart = Math.random().toString(36).substring(2, 8)
+    const communityPart = communityId.substring(0, 8)
+    const domain = 'civildefence.pro'
+    const triggerEmail = `alert-${communityPart}-${randomPart}@${domain}`
 
-    // Create the rule
+    // Create the rule - trigger_type will be 'webhook' as the primary type
+    // but trigger_email is also provided for email-based triggering
     const { data: rule, error } = await supabase
       .from('community_alert_rules')
       .insert({
         community_id: communityId,
         name,
         description,
-        trigger_type: triggerType,
+        trigger_type: 'webhook',
         trigger_email: triggerEmail,
         alert_title: alertTitle,
         alert_message: alertMessage,
         alert_level: alertLevel,
         recipient_group: recipientGroup,
         specific_member_ids: specificMemberIds,
+        target_group_ids: targetGroupIds,
         send_email: sendEmail,
         send_sms: sendSms,
         send_app_notification: sendAppNotification,
