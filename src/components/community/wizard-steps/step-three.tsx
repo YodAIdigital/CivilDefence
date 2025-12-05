@@ -23,8 +23,8 @@ export function StepThree({ data, updateData }: StepThreeProps) {
       <div>
         <h3 className="text-lg font-semibold mb-2">Define Your Community Area</h3>
         <p className="text-muted-foreground text-sm">
-          Draw a boundary around your community's coverage area. This helps members know if they're
-          within the community's response zone. Click "Start Drawing" and then click on the map to add points.
+          Draw a boundary around your community&apos;s coverage area. This helps members know if they&apos;re
+          within the community&apos;s response zone. Click &quot;Start Drawing&quot; and then click on the map to add points.
         </p>
       </div>
 
@@ -46,12 +46,12 @@ export function StepThree({ data, updateData }: StepThreeProps) {
           How to define your area:
         </h4>
         <ol className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-          <li>Click "Start Drawing" to begin</li>
+          <li>Click &quot;Start Drawing&quot; to begin</li>
           <li>Click on the map to add boundary points (minimum 3 points)</li>
           <li>The area will automatically close to form a polygon</li>
           <li>You can drag points to adjust the boundary</li>
           <li>Use the search box to navigate to different areas</li>
-          <li>Click "Save Region" when you're done</li>
+          <li>Click &quot;Save Region&quot; when you&apos;re done</li>
         </ol>
       </div>
     </div>

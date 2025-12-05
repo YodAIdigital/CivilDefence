@@ -112,7 +112,7 @@ JSON response:`
         throw new Error('No JSON found in response')
       }
       analysisData = JSON.parse(jsonMatch[0])
-    } catch (parseError) {
+    } catch {
       console.error('Failed to parse Gemini response:', text)
       throw new Error('Invalid response format from AI')
     }

@@ -29,7 +29,7 @@ export function StepOne({ data, updateData }: StepOneProps) {
       <div>
         <h3 className="text-lg font-semibold mb-4">Basic Information</h3>
         <p className="text-muted-foreground text-sm mb-6">
-          Let's start by setting up your community's basic details and meeting point. The meeting
+          Start by setting up your community&apos;s basic details and meeting point. The meeting
           point is where members will gather during emergencies.
         </p>
       </div>

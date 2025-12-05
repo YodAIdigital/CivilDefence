@@ -17,7 +17,8 @@ interface Member {
   }
 }
 
-interface ExternalRecipient {
+// ExternalRecipient type used for external recipients added via the form
+type _ExternalRecipient = {
   id: string // temporary ID for UI purposes
   name: string
   email: string
