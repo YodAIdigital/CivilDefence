@@ -313,7 +313,7 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
                     <Icon className="h-5 w-5 text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{template.name.split('&')[0].trim()}</p>
+                    <p className="font-medium text-sm truncate">{(template.name.split('&')[0] ?? template.name).trim()}</p>
                     {isSelected && (
                       <CheckCircle2 className="h-4 w-4 text-primary mt-1" />
                     )}

@@ -209,9 +209,28 @@ export default function CommunityPage() {
         // Import guide templates
         const { guideTemplates } = await import('@/data/guide-templates')
 
-        const guideInserts = wizardData.selectedRisks.map((riskType, index) => {
+        type GuideSection = { id: string; title: string; content: string; icon?: string }
+        const guideInserts: Array<{
+          community_id: string
+          name: string
+          description: string
+          icon: string
+          color: string
+          guide_type: string
+          template_id: string
+          sections: { before: GuideSection[]; during: GuideSection[]; after: GuideSection[] }
+          supplies: string[]
+          emergency_contacts: { name: string; number: string; description: string }[]
+          custom_notes: string | null
+          local_resources: string[] | null
+          is_active: boolean
+          display_order: number
+          created_by: string
+        }> = []
+
+        wizardData.selectedRisks.forEach((riskType, index) => {
           const template = guideTemplates.find(t => t.type === riskType)
-          if (!template) return null
+          if (!template) return
 
           // Get customization for this risk type if available
           const customization = wizardData.guideCustomizations?.[riskType]
@@ -231,7 +250,7 @@ export default function CommunityPage() {
             ? [...template.supplies, ...customization.additionalSupplies]
             : template.supplies
 
-          return {
+          guideInserts.push({
             community_id: community.id,
             name: template.name,
             description: template.description,
@@ -247,8 +266,8 @@ export default function CommunityPage() {
             is_active: true,
             display_order: index,
             created_by: user.id,
-          }
-        }).filter(Boolean)
+          })
+        })
 
         if (guideInserts.length > 0) {
           await supabase.from('community_guides').insert(guideInserts)

@@ -201,8 +201,11 @@ export function useCommunity() {
       return {
         communities: [],
         activeCommunity: null,
+        isLoading: false,
         setActiveCommunity: () => {},
         isActiveCommunityAdmin: false,
+        isActiveCommunityTeamMember: false,
+        canManageActiveCommunity: false,
         refreshCommunities: async () => {},
         getRoleForCommunity: () => null
       }
