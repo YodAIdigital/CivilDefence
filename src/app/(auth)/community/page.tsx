@@ -10,7 +10,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { Community, UserRole } from '@/types/database'
-import { Users, Plus, Search, Globe, Lock, Loader2, MapPin, LogOut, Crown, X } from 'lucide-react'
+import { Users, Plus, Search, Globe, Lock, Loader2, MapPin, LogOut, Crown, FileText } from 'lucide-react'
+import { OnboardingWizard, type WizardData } from '@/components/community/onboarding-wizard'
+
+const WIZARD_STORAGE_KEY = 'civildefence_wizard_draft'
 
 interface CommunityWithMembership extends Community {
   isMember: boolean
@@ -26,14 +29,30 @@ export default function CommunityPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [joiningId, setJoiningId] = useState<string | null>(null)
   const [leavingId, setLeavingId] = useState<string | null>(null)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [isCreating, setIsCreating] = useState(false)
-  const [newCommunity, setNewCommunity] = useState({
-    name: '',
-    description: '',
-    location: '',
-    is_public: true
-  })
+  const [showCreateWizard, setShowCreateWizard] = useState(false)
+  const [hasSavedDraft, setHasSavedDraft] = useState(false)
+
+  // Check for saved wizard draft
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(WIZARD_STORAGE_KEY)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        // Check if it has meaningful progress
+        const hasProgress = parsed.data && (
+          parsed.data.communityName?.trim() !== '' ||
+          parsed.data.meetingPointName?.trim() !== '' ||
+          parsed.data.meetingPointAddress?.trim() !== '' ||
+          (parsed.data.selectedRisks && parsed.data.selectedRisks.length > 0) ||
+          (parsed.data.regionPolygon && parsed.data.regionPolygon.length > 0) ||
+          (parsed.data.groups && parsed.data.groups.length > 0)
+        )
+        setHasSavedDraft(hasProgress)
+      }
+    } catch (error) {
+      console.error('Error checking for saved draft:', error)
+    }
+  }, [showCreateWizard]) // Re-check when wizard closes
 
   const fetchData = useCallback(async () => {
     if (!user) return
@@ -132,47 +151,133 @@ export default function CommunityPage() {
     }
   }
 
-  const createCommunity = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleWizardComplete = async (wizardData: WizardData) => {
     if (!user) return
 
     try {
-      setIsCreating(true)
       setError(null)
 
-      const { data, error } = await supabase
+      // Create community with all wizard data
+      const { data: community, error: communityError } = await supabase
         .from('communities')
         .insert({
-          name: newCommunity.name,
-          description: newCommunity.description || null,
-          location: newCommunity.location || null,
-          is_public: newCommunity.is_public,
-          created_by: user.id
+          name: wizardData.communityName,
+          description: wizardData.description || null,
+          location: wizardData.location || null,
+          latitude: wizardData.meetingPointLat,
+          longitude: wizardData.meetingPointLng,
+          is_public: true,
+          created_by: user.id,
+          meeting_point_name: wizardData.meetingPointName,
+          meeting_point_address: wizardData.meetingPointAddress,
+          meeting_point_lat: wizardData.meetingPointLat,
+          meeting_point_lng: wizardData.meetingPointLng,
+          region_polygon: wizardData.regionPolygon,
+          region_color: wizardData.regionColor,
+          region_opacity: wizardData.regionOpacity,
         })
         .select()
         .single()
 
-      if (error) throw error
+      if (communityError) throw communityError
 
-      // Automatically join as admin
+      // Join as admin
       await supabase
         .from('community_members')
         .insert({
-          community_id: data.id,
+          community_id: community.id,
           user_id: user.id,
           role: 'admin'
         })
 
+      // Create groups if any
+      if (wizardData.groups.length > 0) {
+        const groupInserts = wizardData.groups.map(group => ({
+          community_id: community.id,
+          name: group.name,
+          description: group.description,
+          color: group.color,
+          icon: group.icon,
+          created_by: user.id,
+        }))
+
+        await supabase.from('community_groups').insert(groupInserts)
+      }
+
+      // Create disaster guides from selected risks
+      if (wizardData.selectedRisks.length > 0) {
+        // Import guide templates
+        const { guideTemplates } = await import('@/data/guide-templates')
+
+        const guideInserts = wizardData.selectedRisks.map((riskType, index) => {
+          const template = guideTemplates.find(t => t.type === riskType)
+          if (!template) return null
+
+          // Get customization for this risk type if available
+          const customization = wizardData.guideCustomizations?.[riskType]
+
+          // Merge template sections with enhanced sections if customized
+          let sections = template.sections
+          if (customization?.enhancedSections) {
+            sections = {
+              before: [...template.sections.before, ...(customization.enhancedSections.before || [])],
+              during: [...template.sections.during, ...(customization.enhancedSections.during || [])],
+              after: [...template.sections.after, ...(customization.enhancedSections.after || [])],
+            }
+          }
+
+          // Merge supplies
+          const supplies = customization?.additionalSupplies
+            ? [...template.supplies, ...customization.additionalSupplies]
+            : template.supplies
+
+          return {
+            community_id: community.id,
+            name: template.name,
+            description: template.description,
+            icon: template.icon,
+            color: template.color,
+            guide_type: riskType,
+            template_id: template.id,
+            sections,
+            supplies,
+            emergency_contacts: template.emergencyContacts,
+            custom_notes: customization?.customNotes || null,
+            local_resources: customization?.localResources || null,
+            is_active: true,
+            display_order: index,
+            created_by: user.id,
+          }
+        }).filter(Boolean)
+
+        if (guideInserts.length > 0) {
+          await supabase.from('community_guides').insert(guideInserts)
+        }
+
+        // Also store AI analysis in community settings
+        if (wizardData.aiAnalysis) {
+          await supabase
+            .from('communities')
+            .update({
+              settings: {
+                ai_analysis: wizardData.aiAnalysis,
+              }
+            })
+            .eq('id', community.id)
+        }
+      }
+
       await fetchData()
-      setShowCreateModal(false)
-      setNewCommunity({ name: '', description: '', location: '', is_public: true })
-      setSuccess('Community created successfully!')
-      setTimeout(() => setSuccess(null), 3000)
+      setShowCreateWizard(false)
+      setSuccess('Community created successfully! Redirecting to management page...')
+
+      // Redirect to community management page
+      setTimeout(() => {
+        window.location.href = `/community/${community.id}/manage`
+      }, 1500)
     } catch (err) {
       console.error('Error creating community:', err)
-      setError('Failed to create community')
-    } finally {
-      setIsCreating(false)
+      setError('Failed to create community. Please try again.')
     }
   }
 
@@ -202,9 +307,19 @@ export default function CommunityPage() {
             Join or create communities for local emergency coordination.
           </p>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Community
+        <Button onClick={() => setShowCreateWizard(true)} className={hasSavedDraft ? 'relative' : ''}>
+          {hasSavedDraft ? (
+            <>
+              <FileText className="mr-2 h-4 w-4" />
+              Resume Draft
+              <span className="absolute -top-1 -right-1 h-3 w-3 bg-orange-500 rounded-full animate-pulse" />
+            </>
+          ) : (
+            <>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Community
+            </>
+          )}
         </Button>
       </div>
 
@@ -386,80 +501,13 @@ export default function CommunityPage() {
         </CardContent>
       </Card>
 
-      {/* Create Community Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="w-full max-w-md rounded-lg bg-background p-6 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Create Community</h2>
-              <button
-                onClick={() => setShowCreateModal(false)}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <form onSubmit={createCommunity} className="space-y-4">
-              <div>
-                <label className="text-sm font-medium">Name *</label>
-                <Input
-                  value={newCommunity.name}
-                  onChange={(e) => setNewCommunity({ ...newCommunity, name: e.target.value })}
-                  placeholder="Community name"
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Description</label>
-                <Input
-                  value={newCommunity.description}
-                  onChange={(e) => setNewCommunity({ ...newCommunity, description: e.target.value })}
-                  placeholder="Brief description of your community"
-                />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Location</label>
-                <Input
-                  value={newCommunity.location}
-                  onChange={(e) => setNewCommunity({ ...newCommunity, location: e.target.value })}
-                  placeholder="e.g., Auckland, New Zealand"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="is_public"
-                  checked={newCommunity.is_public}
-                  onChange={(e) => setNewCommunity({ ...newCommunity, is_public: e.target.checked })}
-                  className="rounded border-gray-300"
-                />
-                <label htmlFor="is_public" className="text-sm">
-                  Make this community public (anyone can join)
-                </label>
-              </div>
-              <div className="flex gap-2 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowCreateModal(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" className="flex-1" disabled={isCreating}>
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    'Create Community'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {/* Onboarding Wizard */}
+      {showCreateWizard && (
+        <OnboardingWizard
+          userId={user?.id || ''}
+          onComplete={handleWizardComplete}
+          onCancel={() => setShowCreateWizard(false)}
+        />
       )}
     </div>
   )
