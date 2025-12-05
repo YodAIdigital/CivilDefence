@@ -91,8 +91,24 @@ Return ONLY a JSON object with this structure:
     ],
     "during": [],
     "after": []
-  }
+  },
+  "emergencyContacts": [
+    {
+      "name": "Service or Organization Name",
+      "number": "Phone number or website",
+      "description": "Brief description of what this contact is for"
+    }
+  ]
 }
+
+For emergencyContacts, ALWAYS include:
+1. Local emergency services (111 for NZ, 000 for AU, 911 for US, etc.)
+2. Local fire service non-emergency line (if available for the area)
+3. Local police non-emergency line (if available for the area)
+4. Relevant local council emergency line
+5. Any disaster-specific hotlines (e.g., earthquake info, flood warnings, health hotlines)
+6. Local civil defence or emergency management contact
+Make these specific to ${location} - use real, verified phone numbers for the region whenever possible.
 
 Provide real, researched information for ${location}. If you don't have specific information, make reasonable suggestions based on typical infrastructure for the area type.
 

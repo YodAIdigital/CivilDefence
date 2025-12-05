@@ -17,11 +17,24 @@ import {
   Snowflake,
   Biohazard,
   Zap,
-  Shield
+  Shield,
+  Phone,
+  Plus,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Edit2
 } from 'lucide-react'
+import { Input } from '@/components/ui/input'
 import type { WizardData } from '../onboarding-wizard'
 import type { DisasterType } from '@/data/guide-templates'
 import { guideTemplates } from '@/data/guide-templates'
+
+interface EmergencyContact {
+  name: string
+  number: string
+  description: string
+}
 
 interface StepTwoProps {
   data: WizardData
@@ -45,6 +58,8 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
   const [isCustomizing, setIsCustomizing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [customizationSuccess, setCustomizationSuccess] = useState(false)
+  const [showEmergencyContacts, setShowEmergencyContacts] = useState(false)
+  const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null)
 
   const handleAnalyze = async () => {
     if (!data.location) {
@@ -153,6 +168,96 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
         return 'text-yellow-600 dark:text-yellow-400 bg-yellow-50 dark:bg-yellow-950'
     }
   }
+
+  // Get all emergency contacts from customizations, grouped across all risk types
+  const getAllEmergencyContacts = (): EmergencyContact[] => {
+    if (!data.guideCustomizations) return []
+
+    const contactsMap = new Map<string, EmergencyContact>()
+
+    // Collect unique contacts from all risk customizations
+    Object.values(data.guideCustomizations).forEach((customization: any) => {
+      if (customization?.emergencyContacts) {
+        customization.emergencyContacts.forEach((contact: EmergencyContact) => {
+          // Use name + number as key to dedupe
+          const key = `${contact.name}-${contact.number}`
+          if (!contactsMap.has(key)) {
+            contactsMap.set(key, contact)
+          }
+        })
+      }
+    })
+
+    return Array.from(contactsMap.values())
+  }
+
+  const updateContactField = (index: number, field: keyof EmergencyContact, value: string) => {
+    const contacts = getAllEmergencyContacts()
+    const updated: EmergencyContact[] = contacts.map((c, i) =>
+      i === index ? { ...c, [field]: value } : c
+    )
+
+    if (data.guideCustomizations) {
+      const updatedCustomizations = { ...data.guideCustomizations }
+      Object.keys(updatedCustomizations).forEach(riskType => {
+        updatedCustomizations[riskType] = {
+          ...updatedCustomizations[riskType],
+          emergencyContacts: updated
+        }
+      })
+      updateData({ guideCustomizations: updatedCustomizations })
+    }
+  }
+
+  const addEmergencyContact = () => {
+    const newContact: EmergencyContact = {
+      name: '',
+      number: '',
+      description: ''
+    }
+    const contacts = getAllEmergencyContacts()
+    const updatedContacts = [...contacts, newContact]
+
+    // Update all customizations with the new contacts list
+    if (data.guideCustomizations) {
+      const updatedCustomizations = { ...data.guideCustomizations }
+      Object.keys(updatedCustomizations).forEach(riskType => {
+        updatedCustomizations[riskType] = {
+          ...updatedCustomizations[riskType],
+          emergencyContacts: updatedContacts
+        }
+      })
+      updateData({ guideCustomizations: updatedCustomizations })
+    } else {
+      // If no customizations exist, create a base structure
+      const baseCustomization: Record<string, any> = {}
+      data.selectedRisks.forEach(riskType => {
+        baseCustomization[riskType] = { emergencyContacts: updatedContacts }
+      })
+      updateData({ guideCustomizations: baseCustomization })
+    }
+    setEditingContactIndex(updatedContacts.length - 1)
+  }
+
+  const removeEmergencyContact = (index: number) => {
+    const contacts = getAllEmergencyContacts()
+    const updatedContacts = contacts.filter((_, i) => i !== index)
+
+    // Update all customizations with the new contacts list
+    if (data.guideCustomizations) {
+      const updatedCustomizations = { ...data.guideCustomizations }
+      Object.keys(updatedCustomizations).forEach(riskType => {
+        updatedCustomizations[riskType] = {
+          ...updatedCustomizations[riskType],
+          emergencyContacts: updatedContacts
+        }
+      })
+      updateData({ guideCustomizations: updatedCustomizations })
+    }
+    setEditingContactIndex(null)
+  }
+
+  const emergencyContacts = getAllEmergencyContacts()
 
   return (
     <div className="space-y-6">
@@ -378,6 +483,132 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
               </div>
             </div>
           </div>
+        </Card>
+      )}
+
+      {/* Emergency Contacts Section */}
+      {(emergencyContacts.length > 0 || data.guideCustomizations) && (
+        <Card className="p-6 border-2">
+          <div
+            className="flex items-center justify-between cursor-pointer"
+            onClick={() => setShowEmergencyContacts(!showEmergencyContacts)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="rounded-full bg-green-100 dark:bg-green-900 p-2">
+                <Phone className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div>
+                <h4 className="font-semibold">Emergency Contacts</h4>
+                <p className="text-sm text-muted-foreground">
+                  {emergencyContacts.length} contact{emergencyContacts.length !== 1 ? 's' : ''} configured for your area
+                </p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm">
+              {showEmergencyContacts ? (
+                <ChevronUp className="h-5 w-5" />
+              ) : (
+                <ChevronDown className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
+
+          {showEmergencyContacts && (
+            <div className="mt-4 space-y-3">
+              {emergencyContacts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No emergency contacts configured yet. Click &quot;Customize Response Plans&quot; above to auto-populate local emergency contacts, or add them manually.
+                </p>
+              ) : (
+                emergencyContacts.map((contact, index) => (
+                  <div
+                    key={index}
+                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 group"
+                  >
+                    {editingContactIndex === index ? (
+                      <div className="flex-1 space-y-2">
+                        <Input
+                          placeholder="Contact Name"
+                          value={contact.name}
+                          onChange={(e) => updateContactField(index, 'name', e.target.value)}
+                          className="text-sm"
+                        />
+                        <Input
+                          placeholder="Phone Number"
+                          value={contact.number}
+                          onChange={(e) => updateContactField(index, 'number', e.target.value)}
+                          className="text-sm"
+                        />
+                        <Input
+                          placeholder="Description"
+                          value={contact.description}
+                          onChange={(e) => updateContactField(index, 'description', e.target.value)}
+                          className="text-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => setEditingContactIndex(null)}
+                          >
+                            Done
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => removeEmergencyContact(index)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{contact.name || 'Unnamed Contact'}</span>
+                            <span className="text-sm text-primary font-mono">{contact.number}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{contact.description}</p>
+                        </div>
+                        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditingContactIndex(index)
+                            }}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeEmergencyContact(index)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ))
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full mt-2"
+                onClick={addEmergencyContact}
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Emergency Contact
+              </Button>
+            </div>
+          )}
         </Card>
       )}
 

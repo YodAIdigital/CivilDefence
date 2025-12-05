@@ -250,6 +250,11 @@ export default function CommunityPage() {
             ? [...template.supplies, ...customization.additionalSupplies]
             : template.supplies
 
+          // Use customized emergency contacts if available, otherwise use template defaults
+          const emergencyContacts = customization?.emergencyContacts?.length > 0
+            ? customization.emergencyContacts
+            : template.emergencyContacts
+
           guideInserts.push({
             community_id: community.id,
             name: template.name,
@@ -260,7 +265,7 @@ export default function CommunityPage() {
             template_id: template.id,
             sections,
             supplies,
-            emergency_contacts: template.emergencyContacts,
+            emergency_contacts: emergencyContacts,
             custom_notes: customization?.customNotes || null,
             local_resources: customization?.localResources || null,
             is_active: true,
