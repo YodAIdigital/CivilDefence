@@ -865,6 +865,49 @@ export interface Database {
           }
         ]
       }
+      community_groups: {
+        Row: {
+          id: string
+          community_id: string
+          name: string
+          description: string | null
+          color: string
+          icon: string
+          display_order: number
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          name: string
+          description?: string | null
+          color?: string
+          icon?: string
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          name?: string
+          description?: string | null
+          color?: string
+          icon?: string
+          display_order?: number
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'community_groups_community_id_fkey'
+            columns: ['community_id']
+            referencedRelation: 'communities'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
