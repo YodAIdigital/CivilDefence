@@ -908,6 +908,82 @@ export interface Database {
           }
         ]
       }
+      community_guides: {
+        Row: {
+          id: string
+          community_id: string
+          name: string
+          description: string | null
+          icon: string
+          color: string
+          guide_type: string
+          template_id: string
+          sections: Json
+          supplies: Json
+          emergency_contacts: Json
+          custom_notes: string | null
+          local_resources: Json | null
+          is_active: boolean
+          display_order: number
+          created_by: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          name: string
+          description?: string | null
+          icon?: string
+          color?: string
+          guide_type: string
+          template_id: string
+          sections?: Json
+          supplies?: Json
+          emergency_contacts?: Json
+          custom_notes?: string | null
+          local_resources?: Json | null
+          is_active?: boolean
+          display_order?: number
+          created_by: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          name?: string
+          description?: string | null
+          icon?: string
+          color?: string
+          guide_type?: string
+          template_id?: string
+          sections?: Json
+          supplies?: Json
+          emergency_contacts?: Json
+          custom_notes?: string | null
+          local_resources?: Json | null
+          is_active?: boolean
+          display_order?: number
+          created_by?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'community_guides_community_id_fkey'
+            columns: ['community_id']
+            referencedRelation: 'communities'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'community_guides_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
