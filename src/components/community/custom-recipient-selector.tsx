@@ -12,9 +12,9 @@ interface Member {
   user_id: string
   role: CommunityRole
   profile?: {
-    full_name?: string
+    full_name?: string | null
     email?: string
-  }
+  } | null
 }
 
 // ExternalRecipient type used for external recipients added via the form
