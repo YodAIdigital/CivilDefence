@@ -11,7 +11,7 @@ import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete'
 import type { Community, CommunityEvent, CommunityMember, EventType, EventVisibility, Profile } from '@/types/database'
 import { EVENT_TYPE_CONFIG as eventTypeConfig, EVENT_VISIBILITY_CONFIG as visibilityConfig } from '@/types/database'
 
-type TabType = 'events' | 'members' | 'visibility'
+type TabType = 'alerts' | 'members' | 'events' | 'visibility'
 
 interface MemberWithProfile extends CommunityMember {
   profile: Profile
@@ -475,31 +475,26 @@ export default function CommunityEventsPage() {
     )
   }
 
-  const tabs: { id: TabType; label: string; icon: string; href?: string }[] = [
-    { id: 'members', label: `${members.length} Members`, icon: 'people', href: `/community/${communityId}/manage` },
-    { id: 'events', label: 'Manage Events', icon: 'event' },
-    { id: 'visibility', label: 'Response Map', icon: 'map', href: `/community/${communityId}/manage` },
+  const tabs = [
+    { id: 'alerts' as TabType, label: 'Send Alert', icon: 'campaign', href: `/community/${communityId}/manage`, description: 'Send alerts to members' },
+    { id: 'members' as TabType, label: `${members.length} Members`, icon: 'people', href: `/community/${communityId}/manage?tab=members`, description: `Manage roles & permissions` },
+    { id: 'events' as TabType, label: 'Manage Events', icon: 'event', description: 'Schedule community events' },
+    { id: 'visibility' as TabType, label: 'Settings', icon: 'settings', href: `/community/${communityId}/manage?tab=visibility`, description: 'Configure community' },
   ]
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-            <Link href="/community" className="hover:text-foreground">Communities</Link>
-            <span className="material-icons text-sm">chevron_right</span>
-            <span>{community?.name}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-foreground">Manage Community</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage members, roles, and community settings.
-          </p>
+      <div>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+          <Link href="/community" className="hover:text-foreground">Communities</Link>
+          <span className="material-icons text-sm">chevron_right</span>
+          <span>{community?.name}</span>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-          <span className="material-icons text-lg">admin_panel_settings</span>
-          Community Admin
-        </div>
+        <h1 className="text-2xl font-bold text-foreground">Manage Community</h1>
+        <p className="mt-1 text-muted-foreground">
+          Manage members, roles, and community settings.
+        </p>
       </div>
 
       {error && (
@@ -515,39 +510,28 @@ export default function CommunityEventsPage() {
       )}
 
       {/* Tab Navigation */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {tabs.map(tab => {
           const isActive = tab.id === 'events'
+          const isLink = 'href' in tab && tab.href
 
           const tabContent = (
             <div className="flex items-center gap-3">
-              <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${
-                tab.id === 'events' ? 'bg-[#FEB100]/20' :
-                tab.id === 'members' ? 'bg-[#FEB100]/20' :
-                'bg-green-500/10'
-              }`}>
-                <span className={`material-icons text-2xl ${
-                  tab.id === 'events' ? 'text-[#FEB100]' :
-                  tab.id === 'members' ? 'text-[#FEB100]' :
-                  'text-green-500'
-                }`}>{tab.icon}</span>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100">
+                <span className="material-icons text-2xl text-[#000542]">{tab.icon}</span>
               </div>
               <div>
                 <h3 className="font-semibold">{tab.label}</h3>
-                <p className="text-sm text-muted-foreground">
-                  {tab.id === 'events' && 'Schedule community events'}
-                  {tab.id === 'members' && 'Manage roles & permissions'}
-                  {tab.id === 'visibility' && 'Community visibility'}
-                </p>
+                <p className="text-sm text-muted-foreground">{tab.description}</p>
               </div>
             </div>
           )
 
-          if (tab.href) {
+          if (isLink) {
             return (
               <Link
                 key={tab.id}
-                href={tab.href as `/community/${string}/manage`}
+                href={tab.href as `/community/${string}/manage` | `/community/${string}/manage?tab=members` | `/community/${string}/manage?tab=visibility`}
                 className="rounded-xl border border-border bg-card p-5 hover:border-primary/30 transition-colors"
               >
                 {tabContent}
