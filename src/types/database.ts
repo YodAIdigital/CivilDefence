@@ -1039,6 +1039,61 @@ export interface Database {
           }
         ]
       }
+      ai_prompt_configs: {
+        Row: {
+          id: string
+          function_type: string
+          name: string
+          description: string | null
+          prompt_template: string
+          model_id: string
+          is_active: boolean
+          created_by: string | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          function_type: string
+          name: string
+          description?: string | null
+          prompt_template: string
+          model_id: string
+          is_active?: boolean
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          function_type?: string
+          name?: string
+          description?: string | null
+          prompt_template?: string
+          model_id?: string
+          is_active?: boolean
+          created_by?: string | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'ai_prompt_configs_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'ai_prompt_configs_updated_by_fkey'
+            columns: ['updated_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2165,13 +2220,13 @@ export function getSocialFunctionType(baseType: 'social_post' | 'social_image', 
 // AI prompt configuration (stored in database)
 export interface AIPromptConfig {
   id: string
-  function_type: AIFunctionType
+  function_type: string
   name: string
   description: string | null
   prompt_template: string
   model_id: string
   is_active: boolean
-  created_by: string
+  created_by: string | null
   updated_by: string | null
   created_at: string
   updated_at: string
