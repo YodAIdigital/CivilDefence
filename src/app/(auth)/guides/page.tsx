@@ -13,6 +13,41 @@ import type { CommunityGuide, GuideSection, GuideEmergencyContact } from '@/type
 
 type ViewMode = 'list' | 'view' | 'edit' | 'create'
 
+// Risk level badge component
+function RiskLevelBadge({ level }: { level: 'low' | 'medium' | 'high' | null | undefined }) {
+  if (!level) return null
+
+  const config = {
+    low: {
+      bg: 'bg-green-100 dark:bg-green-900/30',
+      text: 'text-green-700 dark:text-green-300',
+      icon: 'check_circle',
+      label: 'Low Risk',
+    },
+    medium: {
+      bg: 'bg-amber-100 dark:bg-amber-900/30',
+      text: 'text-amber-700 dark:text-amber-300',
+      icon: 'warning',
+      label: 'Medium Risk',
+    },
+    high: {
+      bg: 'bg-red-100 dark:bg-red-900/30',
+      text: 'text-red-700 dark:text-red-300',
+      icon: 'error',
+      label: 'High Risk',
+    },
+  }
+
+  const c = config[level]
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${c.bg} ${c.text}`}>
+      <span className="material-icons text-xs">{c.icon}</span>
+      {c.label}
+    </span>
+  )
+}
+
 export default function GuidesPage() {
   const { user } = useAuth()
   const { activeCommunity, canManageActiveCommunity } = useCommunity()
@@ -354,7 +389,10 @@ export default function GuidesPage() {
               <span className="material-icons text-3xl text-white">{selectedGuide.icon}</span>
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl font-bold">{selectedGuide.name}</h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-bold">{selectedGuide.name}</h1>
+                <RiskLevelBadge level={selectedGuide.risk_level} />
+              </div>
               {selectedGuide.description && (
                 <p className="mt-1 text-muted-foreground">{selectedGuide.description}</p>
               )}
@@ -750,12 +788,15 @@ export default function GuidesPage() {
               </p>
             )}
 
-            {!guide.is_active && canEdit && (
-              <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
-                <span className="material-icons text-xs">visibility_off</span>
-                Draft
-              </span>
-            )}
+            <div className="mt-2 flex flex-wrap gap-2">
+              <RiskLevelBadge level={guide.risk_level} />
+              {!guide.is_active && canEdit && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-300">
+                  <span className="material-icons text-xs">visibility_off</span>
+                  Draft
+                </span>
+              )}
+            </div>
 
             <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">

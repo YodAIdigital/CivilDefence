@@ -318,6 +318,7 @@ export default function CommunityPage() {
           emergency_contacts: { name: string; number: string; description: string }[]
           custom_notes: string | null
           local_resources: string[] | null
+          risk_level: 'low' | 'medium' | 'high' | null
           is_active: boolean
           display_order: number
           created_by: string
@@ -329,6 +330,10 @@ export default function CommunityPage() {
 
           // Get customization for this risk type if available
           const customization = wizardData.guideCustomizations?.[riskType]
+
+          // Get risk level from AI analysis
+          const aiRisk = wizardData.aiAnalysis?.risks.find(r => r.type === riskType)
+          const riskLevel = aiRisk?.severity || null
 
           // Merge template sections with enhanced sections if customized
           let sections = template.sections
@@ -363,6 +368,7 @@ export default function CommunityPage() {
             emergency_contacts: emergencyContacts,
             custom_notes: customization?.customNotes || null,
             local_resources: customization?.localResources || null,
+            risk_level: riskLevel,
             is_active: true,
             display_order: index,
             created_by: user.id,

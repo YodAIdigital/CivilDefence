@@ -392,6 +392,36 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
     doc.setFont('helvetica', 'bold')
     doc.text(guide.name, 25, y + 12)
 
+    // Add risk level badge after the guide name
+    if (guide.risk_level) {
+      const nameWidth = doc.getTextWidth(guide.name)
+      const badgeX = 25 + nameWidth + 5
+      const badgeY = y + 7
+
+      // Risk level colors and labels
+      const riskConfig = {
+        low: { bg: [220, 252, 231] as [number, number, number], text: [22, 101, 52] as [number, number, number], label: 'LOW RISK' },
+        medium: { bg: [254, 243, 199] as [number, number, number], text: [146, 64, 14] as [number, number, number], label: 'MEDIUM RISK' },
+        high: { bg: [254, 226, 226] as [number, number, number], text: [153, 27, 27] as [number, number, number], label: 'HIGH RISK' },
+      }
+      const config = riskConfig[guide.risk_level]
+
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      const badgeText = config.label
+      const badgeTextWidth = doc.getTextWidth(badgeText)
+      const badgeWidth = badgeTextWidth + 6
+      const badgeHeight = 6
+
+      // Draw badge background
+      doc.setFillColor(...config.bg)
+      doc.roundedRect(badgeX, badgeY, badgeWidth, badgeHeight, 1.5, 1.5, 'F')
+
+      // Draw badge text
+      doc.setTextColor(...config.text)
+      doc.text(badgeText, badgeX + 3, badgeY + 4.5)
+    }
+
     if (guide.description) {
       doc.setFontSize(10)
       doc.setFont('helvetica', 'normal')

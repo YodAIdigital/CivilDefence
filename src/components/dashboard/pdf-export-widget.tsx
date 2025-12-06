@@ -8,11 +8,17 @@ import {
   downloadEmergencyPDF,
   PDFExportData,
   EmergencyContact,
-  ChecklistCategory,
+  ChecklistCategory as PDFChecklistCategory,
   KeyLocation,
   UserProfileData,
 } from '@/lib/pdf-export'
-import type { CommunityGuide, Community, ProfileExtended, CommunityMapPoint, RegionPolygon } from '@/types/database'
+import {
+  generateDynamicChecklist,
+  type ChecklistCategory as DynamicChecklistCategory,
+  type ResponsePlanSupplies,
+} from '@/lib/dynamic-kit-generator'
+import { guideTemplates } from '@/data/guide-templates'
+import type { CommunityGuide, Community, ProfileExtended, CommunityMapPoint, RegionPolygon, HouseholdMember } from '@/types/database'
 
 // Function to generate a static map image URL using Google Maps Static API
 function generateStaticMapUrl(
@@ -147,56 +153,50 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
   }
 }
 
-// Default checklist categories for PDF export
-const defaultChecklistCategories: ChecklistCategory[] = [
-  {
-    id: 'water',
-    name: 'Water & Food',
-    icon: 'water_drop',
-    items: [
-      { id: 'water-1', name: 'Drinking water (3L per person per day for 3+ days)', checked: false, recheckDays: 90 },
-      { id: 'food-1', name: 'Non-perishable food (3+ days supply)', checked: false, recheckDays: 90 },
-      { id: 'food-2', name: 'Manual can opener', checked: false, recheckDays: 180 },
-    ],
-  },
-  {
-    id: 'first-aid',
-    name: 'First Aid & Medical',
-    icon: 'medical_services',
-    items: [
-      { id: 'med-1', name: 'First aid kit', checked: false, recheckDays: 90 },
-      { id: 'med-2', name: 'Prescription medications (7+ day supply)', checked: false, recheckDays: 90 },
-    ],
-  },
-  {
-    id: 'tools',
-    name: 'Tools & Equipment',
-    icon: 'handyman',
-    items: [
-      { id: 'tool-1', name: 'Torch/flashlight with extra batteries', checked: false, recheckDays: 90 },
-      { id: 'tool-2', name: 'Battery-powered or crank radio', checked: false, recheckDays: 90 },
-    ],
-  },
-]
-
-// Helper to apply stored item states to default checklist structure
-function applyStoredItemsToDefaults(
+// Convert dynamic checklist to PDF format and apply stored states
+function convertToPDFChecklist(
+  dynamicChecklist: DynamicChecklistCategory[],
   storedItems: Record<string, { checked: boolean; lastChecked?: string }>
-): ChecklistCategory[] {
-  return defaultChecklistCategories.map(category => ({
-    ...category,
+): PDFChecklistCategory[] {
+  return dynamicChecklist.map(category => ({
+    id: category.id,
+    name: category.name,
+    icon: category.icon,
     items: category.items.map(item => {
       const stored = storedItems[item.id]
-      if (stored && stored.lastChecked) {
-        return {
-          ...item,
-          checked: stored.checked,
-          lastChecked: stored.lastChecked,
-        }
+      const result: PDFChecklistCategory['items'][0] = {
+        id: item.id,
+        name: item.name,
+        checked: stored?.checked ?? item.checked,
+        recheckDays: item.recheckDays,
       }
-      return item
+      const lastChecked = stored?.lastChecked ?? item.lastChecked
+      if (lastChecked) {
+        result.lastChecked = lastChecked
+      }
+      return result
     }),
   }))
+}
+
+// Get stored checklist item states from localStorage (community-specific)
+function getStoredChecklistItems(communityId: string): Record<string, { checked: boolean; lastChecked?: string }> {
+  if (typeof window === 'undefined') return {}
+
+  try {
+    const communityKey = `civildefence_checklist_v2_${communityId}`
+    const stored = localStorage.getItem(communityKey)
+    if (stored) {
+      const data = JSON.parse(stored)
+      if (data.items) {
+        return data.items
+      }
+    }
+  } catch {
+    // Ignore errors
+  }
+
+  return {}
 }
 
 // Default emergency contacts (NZ)
@@ -211,29 +211,6 @@ const defaultContacts: EmergencyContact[] = [
   { name: 'Road Conditions', number: '0800 44 44 49', description: 'NZTA road information and updates' },
 ]
 
-// Get checklist from localStorage (community-specific)
-function getChecklistFromStorage(communityId: string): ChecklistCategory[] {
-  if (typeof window === 'undefined') return []
-
-  // Try community-specific key first (v2 format)
-  try {
-    const communityKey = `civildefence_checklist_v2_${communityId}`
-    const stored = localStorage.getItem(communityKey)
-    if (stored) {
-      const data = JSON.parse(stored)
-      // v2 format stores items separately, need to merge with default structure
-      if (data.items) {
-        return applyStoredItemsToDefaults(data.items)
-      }
-      return data
-    }
-  } catch {
-    // Ignore errors
-  }
-
-  // Return default checklist structure
-  return defaultChecklistCategories
-}
 
 export function PDFExportWidget() {
   const { activeCommunity } = useCommunity()
@@ -379,8 +356,39 @@ export function PDFExportWidget() {
         }
       })
 
-      // Get checklist from localStorage (community-specific)
-      const checklist = getChecklistFromStorage(activeCommunity.id)
+      // Build response plans for dynamic checklist generation
+      const responsePlans: ResponsePlanSupplies[] = guides.map(guide => {
+        const guideAny = guide as unknown as { supplies?: string[]; guide_type?: string }
+        let supplies: string[] = []
+
+        if (guideAny.supplies && Array.isArray(guideAny.supplies)) {
+          supplies = guideAny.supplies
+        } else {
+          // Get from template
+          const template = guideTemplates.find(t => t.type === guideAny.guide_type)
+          if (template) {
+            supplies = template.supplies
+          }
+        }
+
+        const template = guideTemplates.find(t => t.type === guideAny.guide_type)
+        return {
+          planName: template?.name || guideAny.guide_type || 'Response Plan',
+          planType: guideAny.guide_type || 'general',
+          planIcon: template?.icon || 'emergency',
+          supplies,
+        }
+      })
+
+      // Get household members from extended profile
+      const householdMembers: HouseholdMember[] = extendedProfile?.household_members || []
+
+      // Generate dynamic checklist based on household, profile, and response plans
+      const dynamicChecklist = generateDynamicChecklist(householdMembers, extendedProfile, responsePlans)
+
+      // Get stored item states and apply them to the dynamic checklist
+      const storedItems = getStoredChecklistItems(activeCommunity.id)
+      const checklist = convertToPDFChecklist(dynamicChecklist, storedItems)
 
       // Build export data - spread activeCommunity to exclude userRole
       const { userRole: _userRole, ...communityData } = activeCommunity

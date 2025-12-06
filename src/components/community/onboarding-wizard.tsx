@@ -175,12 +175,12 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
 
   // Auto-save on data or step changes
   useEffect(() => {
-    // Don't save if we're showing the resume prompt or not yet initialized
-    console.log('[Wizard] Auto-save effect - isInitialized:', isInitialized, 'showResumePrompt:', showResumePrompt)
-    if (isInitialized && !showResumePrompt) {
+    // Don't save if we're showing the resume prompt, promo step, or not yet initialized
+    console.log('[Wizard] Auto-save effect - isInitialized:', isInitialized, 'showResumePrompt:', showResumePrompt, 'showPromoStep:', showPromoStep)
+    if (isInitialized && !showResumePrompt && !showPromoStep) {
       saveState()
     }
-  }, [wizardData, currentStep, showResumePrompt, saveState, isInitialized])
+  }, [wizardData, currentStep, showResumePrompt, showPromoStep, saveState, isInitialized])
 
   // Clear saved state on completion
   const clearSavedState = useCallback(() => {
@@ -281,6 +281,8 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
       await onComplete(wizardData)
       // Clear saved state on successful completion
       clearSavedState()
+      setSavedState(null) // Also clear in-memory state to prevent resume prompt
+      setShowResumePrompt(false) // Ensure resume prompt doesn't show
       // Show the promotion step after successful creation
       setShowPromoStep(true)
     } catch (error) {
@@ -308,6 +310,48 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
     if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? '' : 's'} ago`
     if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`
     return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`
+  }
+
+  // If showing the promo step (after community creation), render a simpler UI without the stepper
+  // This check must come BEFORE showResumePrompt to ensure promo step takes priority
+  if (showPromoStep) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div className="w-full max-w-3xl bg-background rounded-2xl shadow-2xl my-8 overflow-hidden border border-border/50">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border-b p-6">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
+                  <Check className="h-6 w-6 text-green-500" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Community Created!</h2>
+                  <p className="text-muted-foreground text-sm mt-0.5">
+                    Help spread the word about {wizardData.communityName}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Promo Content */}
+            <div className="p-6">
+              <StepSix data={wizardData} updateData={updateData} />
+            </div>
+
+            {/* Footer */}
+            <div className="border-t p-4 sm:p-6 bg-gradient-to-r from-muted/50 via-muted/30 to-muted/50">
+              <div className="flex items-center justify-end">
+                <Button onClick={() => onDone ? onDone() : onCancel()} className="gap-2">
+                  <span>Done</span>
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   // Show resume prompt if there's saved progress
@@ -382,47 +426,6 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
       default:
         return false
     }
-  }
-
-  // If showing the promo step (after community creation), render a simpler UI without the stepper
-  if (showPromoStep) {
-    return (
-      <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm overflow-y-auto">
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="w-full max-w-3xl bg-background rounded-2xl shadow-2xl my-8 overflow-hidden border border-border/50">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border-b p-6">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-xl bg-green-500/10 flex items-center justify-center">
-                  <Check className="h-6 w-6 text-green-500" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold">Community Created!</h2>
-                  <p className="text-muted-foreground text-sm mt-0.5">
-                    Help spread the word about {wizardData.communityName}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Promo Content */}
-            <div className="p-6">
-              <StepSix data={wizardData} updateData={updateData} />
-            </div>
-
-            {/* Footer */}
-            <div className="border-t p-4 sm:p-6 bg-gradient-to-r from-muted/50 via-muted/30 to-muted/50">
-              <div className="flex items-center justify-end">
-                <Button onClick={() => onDone ? onDone() : onCancel()} className="gap-2">
-                  <span>Done</span>
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (

@@ -372,41 +372,53 @@ export async function getAllPromptConfigs(): Promise<AIPromptConfig[]> {
 
 // Get configuration by function type
 export async function getPromptConfigByType(functionType: AIFunctionType): Promise<AIPromptConfig | null> {
-  const supabase = createAdminClient()
+  try {
+    const supabase = createAdminClient()
 
-  const { data, error } = await supabase
-    .from('ai_prompt_configs')
-    .select('*')
-    .eq('function_type', functionType)
-    .eq('is_active', true)
-    .single()
+    const { data, error } = await supabase
+      .from('ai_prompt_configs')
+      .select('*')
+      .eq('function_type', functionType)
+      .eq('is_active', true)
+      .single()
 
-  if (error) {
-    if (error.code === 'PGRST116') {
-      // No rows found - try to get from defaults and insert
-      const defaultConfig = DEFAULT_PROMPTS[functionType]
-      if (defaultConfig) {
-        const { data: inserted } = await supabase
-          .from('ai_prompt_configs')
-          .insert({
-            function_type: functionType,
-            name: defaultConfig.name,
-            description: defaultConfig.description,
-            prompt_template: defaultConfig.prompt_template,
-            model_id: defaultConfig.model_id,
-            is_active: true,
-          })
-          .select()
-          .single()
-        return inserted
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No rows found - try to get from defaults and insert
+        const defaultConfig = DEFAULT_PROMPTS[functionType]
+        if (defaultConfig) {
+          const { data: inserted } = await supabase
+            .from('ai_prompt_configs')
+            .insert({
+              function_type: functionType,
+              name: defaultConfig.name,
+              description: defaultConfig.description,
+              prompt_template: defaultConfig.prompt_template,
+              model_id: defaultConfig.model_id,
+              is_active: true,
+            })
+            .select()
+            .single()
+          return inserted
+        }
+        return null
       }
+      // If table doesn't exist (PGRST205) or other error, return null to use defaults
+      if (error.code === 'PGRST205') {
+        console.warn('[ai-prompts] Table ai_prompt_configs not found, using defaults')
+        return null
+      }
+      console.error('Error fetching AI prompt by type:', error)
+      // Return null instead of throwing - graceful fallback to defaults
       return null
     }
-    console.error('Error fetching AI prompt by type:', error)
-    throw error
-  }
 
-  return data
+    return data
+  } catch (err) {
+    // Graceful fallback - if anything goes wrong, use defaults
+    console.warn('[ai-prompts] Error fetching prompt config, using defaults:', err)
+    return null
+  }
 }
 
 // Get configuration by ID

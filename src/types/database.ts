@@ -923,6 +923,7 @@ export interface Database {
           emergency_contacts: Json
           custom_notes: string | null
           local_resources: Json | null
+          risk_level: 'low' | 'medium' | 'high' | null
           is_active: boolean
           display_order: number
           created_by: string
@@ -943,6 +944,7 @@ export interface Database {
           emergency_contacts?: Json
           custom_notes?: string | null
           local_resources?: Json | null
+          risk_level?: 'low' | 'medium' | 'high' | null
           is_active?: boolean
           display_order?: number
           created_by: string
@@ -963,6 +965,7 @@ export interface Database {
           emergency_contacts?: Json
           custom_notes?: string | null
           local_resources?: Json | null
+          risk_level?: 'low' | 'medium' | 'high' | null
           is_active?: boolean
           display_order?: number
           created_by?: string
@@ -1318,6 +1321,7 @@ export interface CommunityGuide {
   templateId: string
   templateType: string // disaster type
   isEnabled: boolean
+  riskLevel?: 'low' | 'medium' | 'high' | null // Risk severity from AI analysis
   customizations?: {
     additionalSections?: Array<{
       id: string
@@ -1519,6 +1523,9 @@ export interface CommunityGuide {
   // Customizations
   custom_notes: string | null
   local_resources: GuideLocalResource[]
+
+  // Risk assessment
+  risk_level: 'low' | 'medium' | 'high' | null
 
   // Status
   is_active: boolean
