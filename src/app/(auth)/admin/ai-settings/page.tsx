@@ -47,6 +47,36 @@ interface MenuFunction {
   hasStyling: boolean
 }
 
+// Available variables for each function type
+const FUNCTION_VARIABLES: Record<string, { name: string; description: string }[]> = {
+  region_analysis: [
+    { name: 'location', description: 'The location name/address being analyzed' },
+    { name: 'coordinates', description: 'Formatted coordinates (e.g., "Coordinates: -36.848, 174.763")' },
+    { name: 'disaster_types', description: 'Comma-separated list of possible disaster types' },
+  ],
+  plan_customization: [
+    { name: 'communityName', description: 'Name of the community' },
+    { name: 'location', description: 'Location/address of the community' },
+    { name: 'planType', description: 'Type of emergency plan (e.g., earthquake, flood)' },
+    { name: 'existingContent', description: 'The base template content to customize' },
+    { name: 'analysisResult', description: 'JSON result from region analysis (risks, regional info)' },
+  ],
+  social_post: [
+    { name: 'communityName', description: 'Name of the community' },
+    { name: 'location', description: 'Location/address of the community' },
+    { name: 'description', description: 'Community description (optional)' },
+  ],
+  social_image: [
+    { name: 'communityName', description: 'Name of the community' },
+    { name: 'location', description: 'Location/address of the community' },
+  ],
+  emergency_contact_localization: [
+    { name: 'country', description: 'Country name' },
+    { name: 'region', description: 'Region/State name' },
+    { name: 'city', description: 'City or local area name' },
+  ],
+}
+
 const MENU_FUNCTIONS: MenuFunction[] = [
   {
     id: 'region_analysis',
@@ -568,11 +598,29 @@ export default function AISettingsPage() {
                   className="font-mono text-sm"
                   placeholder="Enter the prompt template..."
                 />
-                <p className="text-xs text-muted-foreground">
-                  Use <code className="bg-muted px-1 py-0.5 rounded">{'{{variableName}}'}</code> for dynamic values.
-                  Available variables depend on the function.
-                </p>
               </div>
+
+              {/* Available Variables */}
+              {selectedMenuFunction && FUNCTION_VARIABLES[selectedMenuFunction.baseType] && (
+                <div className="space-y-3">
+                  <Label>Available Variables</Label>
+                  <div className="rounded-lg border bg-muted/30 p-4">
+                    <p className="text-sm text-muted-foreground mb-3">
+                      Use these variables in your prompt template. They will be replaced with actual values at runtime.
+                    </p>
+                    <div className="grid gap-2">
+                      {FUNCTION_VARIABLES[selectedMenuFunction.baseType]!.map(variable => (
+                        <div key={variable.name} className="flex items-start gap-3 text-sm">
+                          <code className="bg-primary/10 text-primary px-2 py-1 rounded font-mono whitespace-nowrap">
+                            {`{{${variable.name}}}`}
+                          </code>
+                          <span className="text-muted-foreground pt-1">{variable.description}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Metadata */}
               <div className="rounded-lg border bg-muted/50 p-4 text-sm">

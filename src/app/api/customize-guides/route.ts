@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { DisasterType } from '@/data/guide-templates'
 import { guideTemplates } from '@/data/guide-templates'
+import { getPromptConfigByType, DEFAULT_PROMPTS } from '@/lib/ai-prompts'
 
 interface CustomizeGuidesRequest {
   location: string
@@ -40,9 +41,37 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize Gemini
+    // Get prompt configuration from AI settings
+    const promptConfig = await getPromptConfigByType('plan_customization')
+    const promptTemplate = promptConfig?.prompt_template || DEFAULT_PROMPTS.plan_customization.prompt_template
+    const modelId = promptConfig?.model_id || DEFAULT_PROMPTS.plan_customization.model_id
+
+    // Initialize Gemini with model from settings
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' })
+    const model = genAI.getGenerativeModel({ model: modelId })
+
+    console.log('[customize-guides] Model:', modelId)
+    console.log('[customize-guides] Using custom prompt:', !!promptConfig)
+
+    // Format the analysis result for the prompt
+    const formatAnalysisResult = (analysis: any, riskType: string) => {
+      if (!analysis) return ''
+
+      const riskAnalysis = analysis?.risks?.find((r: any) => r.type === riskType)
+      if (!riskAnalysis && !analysis.regionalInfo) return ''
+
+      let result = 'Regional Analysis Result:\n'
+      if (analysis.regionalInfo) {
+        result += `Regional Overview: ${analysis.regionalInfo}\n`
+      }
+      if (riskAnalysis) {
+        result += `\nRisk Assessment for ${riskType}:\n`
+        result += `- Severity: ${riskAnalysis.severity}\n`
+        result += `- Description: ${riskAnalysis.description}\n`
+        result += `- Recommended Actions: ${riskAnalysis.recommendedActions?.join(', ') || 'N/A'}\n`
+      }
+      return result
+    }
 
     // Process each selected risk
     const customizedGuides = await Promise.all(
@@ -50,31 +79,23 @@ export async function POST(request: NextRequest) {
         const template = guideTemplates.find(t => t.type === riskType)
         if (!template) return null
 
-        // Get risk-specific info from AI analysis if available
-        const riskAnalysis = aiAnalysis?.risks?.find((r: any) => r.type === riskType)
+        // Interpolate the prompt template with values
+        let prompt = promptTemplate
+          .replace(/\{\{communityName\}\}/g, location)
+          .replace(/\{\{location\}\}/g, location)
+          .replace(/\{\{planType\}\}/g, template.name)
+          .replace(/\{\{existingContent\}\}/g, JSON.stringify(template, null, 2))
+          .replace(/\{\{analysisResult\}\}/g, formatAnalysisResult(aiAnalysis, riskType))
 
-        const prompt = `You are an emergency preparedness expert. Customize this emergency response guide for the specific location.
+        // Add coordinates if available
+        if (latitude && longitude) {
+          prompt = `Coordinates: ${latitude}, ${longitude}\n\n${prompt}`
+        }
 
-Location: ${location}
-${latitude && longitude ? `Coordinates: ${latitude}, ${longitude}` : ''}
-Disaster Type: ${template.name}
+        // Append JSON output format requirements
+        prompt += `
 
-${riskAnalysis ? `Regional Risk Analysis:
-Severity: ${riskAnalysis.severity}
-Description: ${riskAnalysis.description}
-Recommended Actions: ${riskAnalysis.recommendedActions.join(', ')}
-` : ''}
-
-Base Guide Template:
-${JSON.stringify(template, null, 2)}
-
-Please provide location-specific customizations for this guide. Focus on:
-1. Local emergency services and contact numbers for ${location}
-2. Specific geographical considerations (terrain, water bodies, infrastructure)
-3. Local evacuation routes or shelter locations
-4. Region-specific preparation steps
-5. Local resources and community centers
-
+CRITICAL OUTPUT FORMAT REQUIREMENT:
 Return ONLY a JSON object with this structure:
 {
   "customNotes": "2-3 paragraphs about specific considerations for this location",

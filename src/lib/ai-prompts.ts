@@ -64,13 +64,17 @@ Location: {{location}}
 Plan Type: {{planType}}
 Existing Plan: {{existingContent}}
 
+{{analysisResult}}
+
 Customize the plan to:
 1. Include local landmarks and resources
 2. Reference local emergency services
-3. Account for regional hazards
-4. Make it specific to the community's needs
+3. Account for regional hazards and risks identified in the analysis
+4. Account for very localised hazards within the region (based on historical knowledge of towns or villages, and geographical features, within the covered region)
+5. Make it specific to the community's needs
 
-Maintain the original structure but localize the content.`,
+- Maintain the original structure but localise the content.
+- Write using British English spelling`,
   },
   // Social Post - Community Style
   social_post_community: {
