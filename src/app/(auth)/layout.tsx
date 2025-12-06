@@ -34,6 +34,7 @@ const navItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { href: '/admin/templates', icon: 'edit_note', label: 'Manage Templates' },
+  { href: '/admin/ai-settings', icon: 'auto_awesome', label: 'AI Settings' },
 ]
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
@@ -144,7 +145,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         }`}
       >
         {/* Community Selector */}
-        {communities.length > 0 && (
+        {communities.length > 0 ? (
           <div className="border-b border-border p-4">
             <div className="relative">
               <button
@@ -183,13 +184,24 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
                       }}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
-                      <span className="material-icons text-lg">add</span>
-                      <span>Community</span>
+                      <span className="material-icons text-lg">settings</span>
+                      <span>My Communities</span>
                     </Link>
                   </div>
                 </div>
               )}
             </div>
+          </div>
+        ) : (
+          <div className="border-b border-border p-4">
+            <Link
+              href="/community"
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border bg-background p-2.5 text-sm hover:bg-muted"
+            >
+              <span className="material-icons text-xl text-muted-foreground">add</span>
+              <span className="font-medium text-muted-foreground">Join or Create Community</span>
+            </Link>
           </div>
         )}
 
@@ -347,7 +359,7 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
         )}
 
         {/* Community Selector */}
-        {communities.length > 0 && (
+        {communities.length > 0 ? (
           <div className={`px-3 pb-3 ${isCollapsed ? 'hidden' : ''}`}>
             <div className="relative">
               <button
@@ -383,13 +395,23 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
                       onClick={() => setIsCommunityDropdownOpen(false)}
                       className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
                     >
-                      <span className="material-icons text-lg">add</span>
-                      <span>Community</span>
+                      <span className="material-icons text-lg">settings</span>
+                      <span>My Communities</span>
                     </Link>
                   </div>
                 </div>
               )}
             </div>
+          </div>
+        ) : (
+          <div className={`px-3 pb-3 ${isCollapsed ? 'hidden' : ''}`}>
+            <Link
+              href="/community"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed border-border bg-background p-2.5 text-sm hover:bg-muted"
+            >
+              <span className="material-icons text-xl text-muted-foreground">add</span>
+              <span className="font-medium text-muted-foreground">Join or Create Community</span>
+            </Link>
           </div>
         )}
 

@@ -9,8 +9,13 @@ import type { RegionCoordinate, RegionPolygon } from '@/types/database'
 interface RegionEditorProps {
   initialPolygon?: RegionPolygon | null
   center?: { lat: number; lng: number } | undefined
+  meetingPoint?: { lat: number; lng: number; name?: string } | null
   onSave: (polygon: RegionPolygon | null, color: string, opacity: number) => Promise<void>
+  onChange?: (polygon: RegionPolygon | null, color: string, opacity: number) => void
+  onMapCapture?: (imageBase64: string) => void // Callback for map screenshot
   isSaving?: boolean
+  compactMode?: boolean // Hide clear/save buttons, move controls below map
+  startInEditMode?: boolean // Start with drawing mode enabled
 }
 
 const DEFAULT_CENTER = { lat: -41.2865, lng: 174.7762 } // Wellington, NZ
@@ -20,8 +25,13 @@ const REGION_OPACITY = 0.1 // 10% opacity
 export function RegionEditor({
   initialPolygon,
   center,
+  meetingPoint,
   onSave,
+  onChange,
+  onMapCapture,
   isSaving = false,
+  compactMode = false,
+  startInEditMode = false,
 }: RegionEditorProps) {
   const mapCenter = center || DEFAULT_CENTER
   const mapRef = useRef<HTMLDivElement>(null)
@@ -29,10 +39,11 @@ export function RegionEditor({
   const polygonRef = useRef<google.maps.Polygon | null>(null)
   const markersRef = useRef<google.maps.Marker[]>([])
   const midpointMarkersRef = useRef<google.maps.Marker[]>([])
+  const meetingPointMarkerRef = useRef<google.maps.Marker | null>(null)
 
   const [isLoaded, setIsLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isDrawing, setIsDrawing] = useState(false)
+  const [isDrawing, setIsDrawing] = useState(startInEditMode)
   const [coordinates, setCoordinates] = useState<RegionCoordinate[]>(initialPolygon || [])
   const [coordinatesHistory, setCoordinatesHistory] = useState<RegionCoordinate[][]>([])
   const [hasChanges, setHasChanges] = useState(false)
@@ -298,7 +309,25 @@ export function RegionEditor({
     if (initialPolygon && initialPolygon.length > 0) {
       setCoordinates(initialPolygon)
     }
-  }, [isLoaded, mapCenter, initialPolygon])
+
+    // Add meeting point marker if provided
+    if (meetingPoint && mapInstanceRef.current) {
+      meetingPointMarkerRef.current = new google.maps.Marker({
+        position: { lat: meetingPoint.lat, lng: meetingPoint.lng },
+        map: mapInstanceRef.current,
+        title: meetingPoint.name || 'Meeting Point',
+        icon: {
+          path: google.maps.SymbolPath.CIRCLE,
+          scale: 10,
+          fillColor: '#22C55E',
+          fillOpacity: 1,
+          strokeColor: '#ffffff',
+          strokeWeight: 2,
+        },
+        zIndex: 100,
+      })
+    }
+  }, [isLoaded, mapCenter, initialPolygon, meetingPoint])
 
   // Update polygon when coordinates change or map loads
   useEffect(() => {
@@ -323,6 +352,60 @@ export function RegionEditor({
   useEffect(() => {
     updatePolygonStyle()
   }, [updatePolygonStyle])
+
+  // Call onChange when coordinates change (for auto-save behavior)
+  useEffect(() => {
+    if (onChange) {
+      const polygonData = coordinates.length >= 3 ? coordinates : null
+      onChange(polygonData, REGION_COLOR, REGION_OPACITY)
+    }
+  }, [coordinates, onChange])
+
+  // Capture map as static image using server-side API route
+  const captureMapImage = useCallback(async () => {
+    if (!onMapCapture || coordinates.length < 3) return
+
+    try {
+      console.log('[RegionEditor] Capturing map image via API, coordinates:', coordinates.length)
+
+      const response = await fetch('/api/generate-map-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coordinates,
+          meetingPoint,
+          regionColor: REGION_COLOR,
+        }),
+      })
+
+      if (!response.ok) {
+        const error = await response.json()
+        console.error('[RegionEditor] Map capture API error:', error)
+        return
+      }
+
+      const result = await response.json()
+      if (result.success && result.imageUrl) {
+        console.log('[RegionEditor] Map image captured successfully, size:', result.imageUrl.length, 'chars')
+        onMapCapture(result.imageUrl)
+      }
+    } catch (error) {
+      console.error('[RegionEditor] Error capturing map image:', error)
+    }
+  }, [coordinates, meetingPoint, onMapCapture])
+
+  // Capture map image when polygon has at least 3 points
+  // In compactMode, capture even while drawing since user doesn't explicitly exit drawing mode
+  useEffect(() => {
+    if (coordinates.length >= 3 && onMapCapture) {
+      // Debounce the capture to avoid too many requests
+      const timer = setTimeout(() => {
+        console.log('[RegionEditor] Triggering map capture, coordinates:', coordinates.length, 'isDrawing:', isDrawing, 'compactMode:', compactMode)
+        captureMapImage()
+      }, 1500) // Slightly longer debounce for better UX
+      return () => clearTimeout(timer)
+    }
+  }, [coordinates, onMapCapture, captureMapImage, isDrawing, compactMode])
 
   const handleClear = () => {
     pushToHistory(coordinates)
@@ -374,6 +457,86 @@ export function RegionEditor({
     )
   }
 
+  // Compact mode for wizard - map first, controls below, no save button
+  if (compactMode) {
+    return (
+      <div className="space-y-3">
+        {/* Map - taller in compact mode */}
+        <div
+          ref={mapRef}
+          className={`rounded-lg overflow-hidden ${isDrawing ? 'cursor-crosshair' : ''}`}
+          style={{ height: '480px', width: '100%' }}
+        />
+
+        {/* Controls below map */}
+        <div className="flex flex-wrap items-center gap-2">
+          {!isDrawing ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={startEditing}
+              className="gap-2"
+            >
+              <Pencil className="h-4 w-4" />
+              {coordinates.length >= 3 ? 'Edit Region' : 'Start Drawing'}
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleUndo}
+              disabled={coordinatesHistory.length === 0}
+              className="gap-2"
+            >
+              <Undo2 className="h-4 w-4" />
+              Undo
+            </Button>
+          )}
+
+          {/* Search */}
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Search for a location..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 border rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary h-9"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1" />
+
+          {/* Status indicator */}
+          <span className="text-sm text-muted-foreground">
+            {coordinates.length === 0
+              ? 'Click "Start Drawing" to begin'
+              : coordinates.length < 3
+              ? `${coordinates.length}/3 points`
+              : `${coordinates.length} points`}
+          </span>
+        </div>
+
+        {/* Compact instructions when drawing */}
+        {isDrawing && (
+          <p className="text-xs text-muted-foreground">
+            Click on the map to add points. Drag white markers to adjust. Need at least 3 points.
+          </p>
+        )}
+      </div>
+    )
+  }
+
+  // Standard mode - controls above map
   return (
     <div className="space-y-4">
       {/* Controls */}

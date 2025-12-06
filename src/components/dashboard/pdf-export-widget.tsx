@@ -147,6 +147,58 @@ async function fetchImageAsBase64(url: string): Promise<string | null> {
   }
 }
 
+// Default checklist categories for PDF export
+const defaultChecklistCategories: ChecklistCategory[] = [
+  {
+    id: 'water',
+    name: 'Water & Food',
+    icon: 'water_drop',
+    items: [
+      { id: 'water-1', name: 'Drinking water (3L per person per day for 3+ days)', checked: false, recheckDays: 90 },
+      { id: 'food-1', name: 'Non-perishable food (3+ days supply)', checked: false, recheckDays: 90 },
+      { id: 'food-2', name: 'Manual can opener', checked: false, recheckDays: 180 },
+    ],
+  },
+  {
+    id: 'first-aid',
+    name: 'First Aid & Medical',
+    icon: 'medical_services',
+    items: [
+      { id: 'med-1', name: 'First aid kit', checked: false, recheckDays: 90 },
+      { id: 'med-2', name: 'Prescription medications (7+ day supply)', checked: false, recheckDays: 90 },
+    ],
+  },
+  {
+    id: 'tools',
+    name: 'Tools & Equipment',
+    icon: 'handyman',
+    items: [
+      { id: 'tool-1', name: 'Torch/flashlight with extra batteries', checked: false, recheckDays: 90 },
+      { id: 'tool-2', name: 'Battery-powered or crank radio', checked: false, recheckDays: 90 },
+    ],
+  },
+]
+
+// Helper to apply stored item states to default checklist structure
+function applyStoredItemsToDefaults(
+  storedItems: Record<string, { checked: boolean; lastChecked?: string }>
+): ChecklistCategory[] {
+  return defaultChecklistCategories.map(category => ({
+    ...category,
+    items: category.items.map(item => {
+      const stored = storedItems[item.id]
+      if (stored && stored.lastChecked) {
+        return {
+          ...item,
+          checked: stored.checked,
+          lastChecked: stored.lastChecked,
+        }
+      }
+      return item
+    }),
+  }))
+}
+
 // Default emergency contacts (NZ)
 const defaultContacts: EmergencyContact[] = [
   { name: 'Emergency Services', number: '111', description: 'Police, Fire, Ambulance - Life threatening emergencies' },
@@ -159,50 +211,28 @@ const defaultContacts: EmergencyContact[] = [
   { name: 'Road Conditions', number: '0800 44 44 49', description: 'NZTA road information and updates' },
 ]
 
-// Get checklist from localStorage
-function getChecklistFromStorage(): ChecklistCategory[] {
+// Get checklist from localStorage (community-specific)
+function getChecklistFromStorage(communityId: string): ChecklistCategory[] {
   if (typeof window === 'undefined') return []
 
+  // Try community-specific key first (v2 format)
   try {
-    const stored = localStorage.getItem('civildefence_checklist')
+    const communityKey = `civildefence_checklist_v2_${communityId}`
+    const stored = localStorage.getItem(communityKey)
     if (stored) {
-      return JSON.parse(stored)
+      const data = JSON.parse(stored)
+      // v2 format stores items separately, need to merge with default structure
+      if (data.items) {
+        return applyStoredItemsToDefaults(data.items)
+      }
+      return data
     }
   } catch {
     // Ignore errors
   }
 
   // Return default checklist structure
-  return [
-    {
-      id: 'water',
-      name: 'Water & Food',
-      icon: 'water_drop',
-      items: [
-        { id: 'water-1', name: 'Drinking water (3L per person per day for 3+ days)', checked: false, recheckDays: 90 },
-        { id: 'food-1', name: 'Non-perishable food (3+ days supply)', checked: false, recheckDays: 90 },
-        { id: 'food-2', name: 'Manual can opener', checked: false, recheckDays: 180 },
-      ],
-    },
-    {
-      id: 'first-aid',
-      name: 'First Aid & Medical',
-      icon: 'medical_services',
-      items: [
-        { id: 'med-1', name: 'First aid kit', checked: false, recheckDays: 90 },
-        { id: 'med-2', name: 'Prescription medications (7+ day supply)', checked: false, recheckDays: 90 },
-      ],
-    },
-    {
-      id: 'tools',
-      name: 'Tools & Equipment',
-      icon: 'handyman',
-      items: [
-        { id: 'tool-1', name: 'Torch/flashlight with extra batteries', checked: false, recheckDays: 90 },
-        { id: 'tool-2', name: 'Battery-powered or crank radio', checked: false, recheckDays: 90 },
-      ],
-    },
-  ]
+  return defaultChecklistCategories
 }
 
 export function PDFExportWidget() {
@@ -349,8 +379,8 @@ export function PDFExportWidget() {
         }
       })
 
-      // Get checklist from localStorage
-      const checklist = getChecklistFromStorage()
+      // Get checklist from localStorage (community-specific)
+      const checklist = getChecklistFromStorage(activeCommunity.id)
 
       // Build export data - spread activeCommunity to exclude userRole
       const { userRole: _userRole, ...communityData } = activeCommunity

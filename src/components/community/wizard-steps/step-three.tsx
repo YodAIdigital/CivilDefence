@@ -1,5 +1,6 @@
 'use client'
 
+import { useCallback } from 'react'
 import { RegionEditor } from '@/components/maps/region-editor'
 import type { WizardData } from '../onboarding-wizard'
 import type { RegionPolygon } from '@/types/database'
@@ -10,6 +11,16 @@ interface StepThreeProps {
 }
 
 export function StepThree({ data, updateData }: StepThreeProps) {
+  // Auto-save when region changes (for wizard's Next button validation)
+  const handleChange = useCallback((polygon: RegionPolygon | null, color: string, opacity: number) => {
+    updateData({
+      regionPolygon: polygon,
+      regionColor: color,
+      regionOpacity: opacity,
+    })
+  }, [updateData])
+
+  // Legacy save handler (not used in compact mode but required by interface)
   const handleSave = async (polygon: RegionPolygon | null, color: string, opacity: number) => {
     updateData({
       regionPolygon: polygon,
@@ -18,42 +29,42 @@ export function StepThree({ data, updateData }: StepThreeProps) {
     })
   }
 
+  // Capture map image when region is defined
+  const handleMapCapture = useCallback((imageBase64: string) => {
+    console.log('[StepThree] Map image captured, length:', imageBase64.length, 'chars')
+    updateData({
+      regionMapImage: imageBase64,
+    })
+  }, [updateData])
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h3 className="text-lg font-semibold mb-2">Define Your Community Area</h3>
         <p className="text-muted-foreground text-sm">
-          Draw a boundary around your community&apos;s coverage area. This helps members know if they&apos;re
-          within the community&apos;s response zone. Click &quot;Start Drawing&quot; and then click on the map to add points.
+          Draw your community&apos;s coverage area on the map. The green marker shows your meeting point.
         </p>
       </div>
 
-      <div className="border rounded-lg overflow-hidden" style={{ height: '600px' }}>
-        <RegionEditor
-          initialPolygon={data.regionPolygon}
-          center={
-            data.meetingPointLat && data.meetingPointLng
-              ? { lat: data.meetingPointLat, lng: data.meetingPointLng }
-              : undefined
-          }
-          onSave={handleSave}
-          isSaving={false}
-        />
-      </div>
-
-      <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-        <h4 className="font-medium text-sm mb-2 text-blue-900 dark:text-blue-100">
-          How to define your area:
-        </h4>
-        <ol className="text-xs text-blue-800 dark:text-blue-200 space-y-1 list-decimal list-inside">
-          <li>Click &quot;Start Drawing&quot; to begin</li>
-          <li>Click on the map to add boundary points (minimum 3 points)</li>
-          <li>The area will automatically close to form a polygon</li>
-          <li>You can drag points to adjust the boundary</li>
-          <li>Use the search box to navigate to different areas</li>
-          <li>Click &quot;Save Region&quot; when you&apos;re done</li>
-        </ol>
-      </div>
+      <RegionEditor
+        initialPolygon={data.regionPolygon}
+        center={
+          data.meetingPointLat && data.meetingPointLng
+            ? { lat: data.meetingPointLat, lng: data.meetingPointLng }
+            : undefined
+        }
+        meetingPoint={
+          data.meetingPointLat && data.meetingPointLng
+            ? { lat: data.meetingPointLat, lng: data.meetingPointLng, name: data.meetingPointName }
+            : null
+        }
+        onSave={handleSave}
+        onChange={handleChange}
+        onMapCapture={handleMapCapture}
+        isSaving={false}
+        compactMode={true}
+        startInEditMode={true}
+      />
     </div>
   )
 }

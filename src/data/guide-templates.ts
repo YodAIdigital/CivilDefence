@@ -13,6 +13,9 @@ export type DisasterType =
   | 'pandemic'
   | 'solar_storm'
   | 'invasion'
+  | 'volcano'
+  | 'tornado'
+  | 'heat_wave'
 
 export interface GuideSection {
   id: string
@@ -61,7 +64,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Wildfire & Fire Emergency',
     description: 'Comprehensive guide for preparing, responding to, and recovering from fire emergencies including wildfires and house fires.',
     icon: 'local_fire_department',
-    color: 'from-orange-500 to-red-600',
+    color: '#ea580c',
     sections: {
       before: [
         {
@@ -170,7 +173,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Flood Emergency',
     description: 'Guide for preparing and responding to floods, flash floods, and storm surge events.',
     icon: 'water',
-    color: 'from-blue-500 to-cyan-600',
+    color: '#0891b2',
     sections: {
       before: [
         {
@@ -279,7 +282,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Strong Winds & Storm Emergency',
     description: 'Preparation and response guide for severe wind events, cyclones, and storms.',
     icon: 'air',
-    color: 'from-slate-500 to-gray-700',
+    color: '#64748b',
     sections: {
       before: [
         {
@@ -388,7 +391,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Earthquake Emergency',
     description: 'Complete guide for earthquake preparedness, response, and recovery.',
     icon: 'vibration',
-    color: 'from-amber-600 to-yellow-700',
+    color: '#d97706',
     sections: {
       before: [
         {
@@ -498,7 +501,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Tsunami Emergency',
     description: 'Critical information for tsunami awareness, warning systems, and evacuation procedures.',
     icon: 'waves',
-    color: 'from-teal-500 to-blue-700',
+    color: '#4f46e5',
     sections: {
       before: [
         {
@@ -607,7 +610,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Snow & Ice Emergency',
     description: 'Guide for preparing and responding to severe winter weather, snow storms, and ice events.',
     icon: 'ac_unit',
-    color: 'from-sky-400 to-indigo-500',
+    color: '#0ea5e9',
     sections: {
       before: [
         {
@@ -716,7 +719,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Pandemic & Health Emergency',
     description: 'Comprehensive guide for preparing and responding to infectious disease outbreaks and pandemics.',
     icon: 'coronavirus',
-    color: 'from-green-500 to-emerald-700',
+    color: '#059669',
     sections: {
       before: [
         {
@@ -826,7 +829,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Solar Storm & Geomagnetic Event',
     description: 'Preparation guide for severe space weather events that may affect power grids and communications.',
     icon: 'wb_sunny',
-    color: 'from-yellow-400 to-orange-600',
+    color: '#eab308',
     sections: {
       before: [
         {
@@ -936,7 +939,7 @@ export const guideTemplates: GuideTemplate[] = [
     name: 'Outside Invasion & Security Emergency',
     description: 'Critical guide for community protection during armed conflict, hostile incursions, or raider attacks during extreme events.',
     icon: 'shield',
-    color: 'from-red-700 to-slate-800',
+    color: '#dc2626',
     sections: {
       before: [
         {
@@ -1063,6 +1066,342 @@ export const guideTemplates: GuideTemplate[] = [
       { name: 'Neighbouring Community', number: 'Radio Channel', description: 'Mutual aid network' },
       { name: 'Civil Defence', number: 'Check local listings', description: 'Emergency coordination' }
     ]
+  },
+  {
+    id: 'volcano-template',
+    type: 'volcano',
+    name: 'Volcanic Eruption Emergency',
+    description: 'Comprehensive guide for preparing and responding to volcanic eruptions, ashfall, and related hazards.',
+    icon: 'volcano',
+    color: '#ef4444',
+    sections: {
+      before: [
+        {
+          id: 'volcano-before-1',
+          title: 'Know Your Risk',
+          content: 'Learn if you live in a volcanic hazard zone. Understand different volcanic hazards: lava flows, pyroclastic flows, lahars (mudflows), ashfall, volcanic gases. Know evacuation zones and routes. Monitor volcanic activity alerts from GeoNet.',
+          icon: 'map'
+        },
+        {
+          id: 'volcano-before-2',
+          title: 'Prepare Emergency Supplies',
+          content: 'Stock N95 or P2 masks for each family member (essential for ashfall). Include goggles to protect eyes from ash. Store drinking water in sealed containers. Keep vehicle fuel tank at least half full. Have plastic sheeting to seal windows and doors.',
+          icon: 'inventory_2'
+        },
+        {
+          id: 'volcano-before-3',
+          title: 'Plan for Evacuation',
+          content: 'Know multiple evacuation routes away from the volcano. Plan for lahars which follow river valleys. Identify shelter locations outside hazard zones. Practice evacuation drills with family. Keep important documents ready to grab.',
+          icon: 'route'
+        },
+        {
+          id: 'volcano-before-4',
+          title: 'Protect Your Property',
+          content: 'Know how to turn off utilities. Cover water tanks and outdoor equipment. Have sturdy roof to withstand ash weight. Plan how to safely remove ash from roof. Protect air conditioning and ventilation systems.',
+          icon: 'home'
+        }
+      ],
+      during: [
+        {
+          id: 'volcano-during-1',
+          title: 'Evacuate If Ordered',
+          content: 'Leave immediately when evacuation is ordered. Do not wait to see the eruption. Avoid river valleys and low-lying areas (lahar paths). Drive slowly in ashfall conditions. Follow official evacuation routes.',
+          icon: 'directions_run'
+        },
+        {
+          id: 'volcano-during-2',
+          title: 'If Caught in Ashfall',
+          content: 'Stay indoors and close all windows and doors. Wear N95/P2 mask and goggles if you must go outside. Avoid driving unless absolutely necessary. Cover your nose and mouth. Remove contact lenses and wear glasses instead.',
+          icon: 'masks'
+        },
+        {
+          id: 'volcano-during-3',
+          title: 'Protect Against Volcanic Gases',
+          content: 'Move to higher ground if you smell sulphur (rotten egg smell). Do not shelter in low-lying areas where gases accumulate. Evacuate if you have breathing difficulties. Keep vehicle windows closed.',
+          icon: 'air'
+        },
+        {
+          id: 'volcano-during-4',
+          title: 'Stay Informed',
+          content: 'Monitor GeoNet and official emergency channels. Follow Civil Defence instructions. Do not return home until all-clear is given. Be prepared for multiple eruption phases. Watch for secondary hazards like floods.',
+          icon: 'radio'
+        }
+      ],
+      after: [
+        {
+          id: 'volcano-after-1',
+          title: 'Return Safely',
+          content: 'Return only when authorities confirm it is safe. Wear protective gear (mask, goggles, long sleeves). Check for structural damage from ash weight. Be aware of continuing volcanic activity. Avoid volcanic gases in low areas.',
+          icon: 'home'
+        },
+        {
+          id: 'volcano-after-2',
+          title: 'Clean Up Ash Safely',
+          content: 'Wear N95/P2 mask and goggles during cleanup. Dampen ash before sweeping to reduce dust. Clear ash from roofs to prevent collapse. Do not wash ash into stormwater drains. Bag ash for proper disposal.',
+          icon: 'cleaning_services'
+        },
+        {
+          id: 'volcano-after-3',
+          title: 'Protect Water and Food',
+          content: 'Do not drink water that may be contaminated with ash. Check rainwater tanks for contamination. Discard food that has been exposed to ash. Follow boil water notices if issued.',
+          icon: 'water_drop'
+        },
+        {
+          id: 'volcano-after-4',
+          title: 'Health Precautions',
+          content: 'Seek medical attention if you have breathing problems. Watch for eye irritation from ash. Keep children and elderly indoors until ash settles. Monitor air quality reports. Continue wearing masks outdoors.',
+          icon: 'health_and_safety'
+        }
+      ]
+    },
+    supplies: [
+      'N95 or P2 masks (multiple per person)',
+      'Protective goggles (non-vented)',
+      'Long-sleeved shirts and long pants',
+      'Plastic sheeting and duct tape',
+      'Drinking water in sealed containers (7+ days)',
+      'Non-perishable food (7+ days)',
+      'Battery-powered radio',
+      'Flashlights with extra batteries',
+      'First aid kit',
+      'Shovel and broom for ash removal',
+      'Heavy-duty garbage bags',
+      'Air filters for vehicles and home',
+      'Medications (extended supply)',
+      'Important documents in waterproof bag',
+      'Full tank of fuel in vehicle'
+    ],
+    emergencyContacts: [
+      { name: 'Emergency Services', number: '111', description: 'Fire, Police, Ambulance' },
+      { name: 'GeoNet', number: 'geonet.org.nz', description: 'Volcanic activity monitoring' },
+      { name: 'Civil Defence', number: 'Check local listings', description: 'Emergency management and evacuation' }
+    ]
+  },
+  {
+    id: 'tornado-template',
+    type: 'tornado',
+    name: 'Tornado Emergency',
+    description: 'Essential guide for tornado safety including preparation, shelter procedures, and recovery.',
+    icon: 'tornado',
+    color: '#475569',
+    sections: {
+      before: [
+        {
+          id: 'tornado-before-1',
+          title: 'Identify Safe Shelter',
+          content: 'Identify the safest place in your home: basement, storm cellar, or interior room on lowest floor. Stay away from windows, doors, and outside walls. Interior bathrooms or closets offer good protection. If in mobile home, identify sturdy building nearby.',
+          icon: 'home'
+        },
+        {
+          id: 'tornado-before-2',
+          title: 'Know Warning Signs',
+          content: 'Watch for dark, greenish sky. Look for large, dark, low-lying clouds. Listen for loud roar similar to a freight train. Watch for large hail. Be alert if the sky suddenly becomes calm after a storm.',
+          icon: 'warning'
+        },
+        {
+          id: 'tornado-before-3',
+          title: 'Prepare Emergency Kit',
+          content: 'Store emergency supplies in your shelter location. Include helmet or head protection. Keep sturdy shoes in shelter area. Have flashlight and battery radio. Include first aid kit and medications.',
+          icon: 'backpack'
+        },
+        {
+          id: 'tornado-before-4',
+          title: 'Practice Family Plan',
+          content: 'Conduct tornado drills regularly. Ensure everyone knows the shelter location. Practice getting to shelter quickly. Have a plan for if family members are separated. Know shelter locations at work, school, and other places.',
+          icon: 'family_restroom'
+        }
+      ],
+      during: [
+        {
+          id: 'tornado-during-1',
+          title: 'Take Shelter Immediately',
+          content: 'Go to your safe room or shelter immediately. Get under sturdy furniture and cover your head. Put as many walls between you and outside as possible. Stay away from windows, doors, and outside walls. Stay in shelter until all-clear.',
+          icon: 'shield'
+        },
+        {
+          id: 'tornado-during-2',
+          title: 'If in a Building',
+          content: 'Go to basement or interior room on lowest floor. Crouch low to ground, face down. Cover head with arms or cushion. If in multi-story building, go to interior hallway on lowest floor. Avoid elevators.',
+          icon: 'apartment'
+        },
+        {
+          id: 'tornado-during-3',
+          title: 'If Caught Outdoors',
+          content: 'Seek shelter in sturdy building immediately. If no shelter, lie flat in a ditch or low area. Cover your head with your hands. Do not shelter under bridges or overpasses. Stay away from trees and vehicles.',
+          icon: 'terrain'
+        },
+        {
+          id: 'tornado-during-4',
+          title: 'If in a Vehicle',
+          content: 'Do not try to outrun a tornado in a vehicle. Get out and seek sturdy shelter if possible. If no shelter nearby, stay in car with seatbelt on. Get below window level and cover head. Park away from trees and other vehicles.',
+          icon: 'directions_car'
+        }
+      ],
+      after: [
+        {
+          id: 'tornado-after-1',
+          title: 'Exit Shelter Carefully',
+          content: 'Wait until you are certain the tornado has passed. Watch for fallen debris and power lines. Be cautious of structural damage in buildings. Watch for gas leaks (smell of gas). Use flashlight, not candles or flames.',
+          icon: 'warning'
+        },
+        {
+          id: 'tornado-after-2',
+          title: 'Check for Injuries',
+          content: 'Check yourself and others for injuries. Provide first aid if trained. Call 111 for medical emergencies. Do not move seriously injured unless in immediate danger. Watch for signs of shock.',
+          icon: 'medical_services'
+        },
+        {
+          id: 'tornado-after-3',
+          title: 'Document Damage',
+          content: 'Take photos and videos of all damage. Do not enter severely damaged buildings. Contact insurance company promptly. Keep receipts for all emergency expenses. Apply for disaster assistance if available.',
+          icon: 'photo_camera'
+        },
+        {
+          id: 'tornado-after-4',
+          title: 'Stay Safe During Cleanup',
+          content: 'Wear protective gear (gloves, sturdy shoes, long pants). Be alert for hazards in debris. Do not use power tools near downed lines. Pace yourself and take breaks. Ask for help when needed.',
+          icon: 'construction'
+        }
+      ]
+    },
+    supplies: [
+      'Bicycle or motorcycle helmet for head protection',
+      'Sturdy shoes in shelter area',
+      'Flashlight with extra batteries',
+      'Battery-powered weather radio',
+      'First aid kit',
+      'Whistle (to signal for help)',
+      'Blankets or sleeping bags',
+      'Non-perishable food',
+      'Bottled water',
+      'Phone charger and power bank',
+      'Important documents (copies)',
+      'Medications',
+      'Thick cushions or mattress for protection',
+      'Work gloves for cleanup',
+      'Dust masks'
+    ],
+    emergencyContacts: [
+      { name: 'Emergency Services', number: '111', description: 'Fire, Police, Ambulance' },
+      { name: 'MetService', number: 'metservice.com', description: 'Weather warnings and alerts' },
+      { name: 'Civil Defence', number: 'Check local listings', description: 'Emergency management' }
+    ]
+  },
+  {
+    id: 'heat-wave-template',
+    type: 'heat_wave',
+    name: 'Heat Wave & Drought Emergency',
+    description: 'Guide for preparing and responding to extreme heat events, heat waves, and prolonged drought conditions.',
+    icon: 'thermostat',
+    color: '#f97316',
+    sections: {
+      before: [
+        {
+          id: 'heat-before-1',
+          title: 'Prepare Your Home',
+          content: 'Install or check air conditioning and fans. Install reflective window coverings or external blinds. Identify coolest rooms in your home. Insulate your home to keep heat out. Check that refrigerator and freezer are working efficiently.',
+          icon: 'home'
+        },
+        {
+          id: 'heat-before-2',
+          title: 'Know Who Is At Risk',
+          content: 'Elderly people are at high risk. Check on elderly neighbours and relatives. Young children are vulnerable to heat. People with chronic conditions need extra care. Know signs of heat exhaustion and heat stroke.',
+          icon: 'elderly'
+        },
+        {
+          id: 'heat-before-3',
+          title: 'Plan for Water Shortages',
+          content: 'Store extra drinking water. Know water restrictions in your area. Install water-efficient fixtures. Collect grey water for gardens if permitted. Identify drought-resistant plants for landscaping.',
+          icon: 'water_drop'
+        },
+        {
+          id: 'heat-before-4',
+          title: 'Prepare Emergency Supplies',
+          content: 'Stock oral rehydration solutions. Have battery-operated fans available. Keep sunscreen and hats accessible. Store extra water for pets. Have backup power for medical equipment that needs cooling.',
+          icon: 'inventory_2'
+        }
+      ],
+      during: [
+        {
+          id: 'heat-during-1',
+          title: 'Stay Cool',
+          content: 'Stay indoors during hottest hours (11am-5pm). Use air conditioning or fans. Take cool showers or baths. Apply cool wet cloths to skin. Visit public air-conditioned spaces if needed.',
+          icon: 'ac_unit'
+        },
+        {
+          id: 'heat-during-2',
+          title: 'Stay Hydrated',
+          content: 'Drink water regularly, even if not thirsty. Avoid alcohol and caffeine which dehydrate. Eat light meals with high water content. Take oral rehydration solutions if sweating heavily. Monitor urine colour (dark means dehydrated).',
+          icon: 'water'
+        },
+        {
+          id: 'heat-during-3',
+          title: 'Protect Yourself Outdoors',
+          content: 'Wear loose, light-coloured clothing. Apply sunscreen SPF 30+ frequently. Wear a wide-brimmed hat and sunglasses. Schedule outdoor activities for early morning or evening. Rest in shade frequently.',
+          icon: 'wb_sunny'
+        },
+        {
+          id: 'heat-during-4',
+          title: 'Recognise Heat Illness',
+          content: 'Heat exhaustion symptoms: heavy sweating, weakness, cold/pale/clammy skin, nausea, fainting. Heat stroke symptoms: high body temperature, hot/red/dry skin, rapid pulse, confusion. Heat stroke is a medical emergency - call 111 immediately.',
+          icon: 'health_and_safety'
+        },
+        {
+          id: 'heat-during-5',
+          title: 'Protect Vulnerable People',
+          content: 'Check on elderly, young, and unwell people regularly. Never leave children or pets in vehicles. Ensure vulnerable people have access to cooling. Encourage them to drink water. Know when to seek medical help.',
+          icon: 'volunteer_activism'
+        }
+      ],
+      after: [
+        {
+          id: 'heat-after-1',
+          title: 'Continue Monitoring Health',
+          content: 'Heat-related illness can develop after exposure. Continue drinking plenty of water. Watch for delayed symptoms. Seek medical attention if feeling unwell. Rest and recover in cool environment.',
+          icon: 'healing'
+        },
+        {
+          id: 'heat-after-2',
+          title: 'Address Drought Impacts',
+          content: 'Check on water supplies and storage. Assess garden and landscape damage. Follow ongoing water restrictions. Plan for future drought resilience. Check livestock and farm animals.',
+          icon: 'grass'
+        },
+        {
+          id: 'heat-after-3',
+          title: 'Maintain Preparedness',
+          content: 'Restock water and supplies used. Repair or improve cooling systems. Plant drought-resistant vegetation. Review what worked and what did not. Prepare for potential ongoing conditions.',
+          icon: 'checklist'
+        },
+        {
+          id: 'heat-after-4',
+          title: 'Support Community',
+          content: 'Continue checking on vulnerable neighbours. Share resources with those in need. Report ongoing concerns to authorities. Support community cooling initiatives. Volunteer with emergency services if able.',
+          icon: 'groups'
+        }
+      ]
+    },
+    supplies: [
+      'Extra drinking water (4L+ per person per day)',
+      'Oral rehydration solutions',
+      'Battery-operated or USB fans',
+      'Spray bottles for misting',
+      'Sunscreen SPF 30+',
+      'Wide-brimmed hats',
+      'Sunglasses',
+      'Light, loose-fitting clothing',
+      'Cooling towels',
+      'Ice packs or gel packs',
+      'Electrolyte drinks',
+      'Light, easy-to-prepare foods',
+      'Backup power for cooling devices',
+      'First aid kit with heat illness supplies',
+      'Water storage containers'
+    ],
+    emergencyContacts: [
+      { name: 'Emergency Services', number: '111', description: 'Medical emergencies including heat stroke' },
+      { name: 'Healthline', number: '0800 611 116', description: 'Health advice 24/7' },
+      { name: 'Local Council', number: 'Check local listings', description: 'Water restrictions and information' }
+    ]
   }
 ]
 
@@ -1087,7 +1426,10 @@ export function getDisasterTypeName(type: DisasterType): string {
     snow: 'Snow & Ice',
     pandemic: 'Pandemic',
     solar_storm: 'Solar Storm',
-    invasion: 'Outside Invasion'
+    invasion: 'Outside Invasion',
+    volcano: 'Volcanic Eruption',
+    tornado: 'Tornado',
+    heat_wave: 'Heat Wave & Drought'
   }
   return names[type]
 }

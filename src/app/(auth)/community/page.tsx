@@ -3,14 +3,16 @@
 export const dynamic = 'force-dynamic'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
+import { useCommunity } from '@/contexts/community-context'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { Community, UserRole } from '@/types/database'
-import { Users, Plus, Search, Globe, Lock, Loader2, MapPin, LogOut, Crown, FileText } from 'lucide-react'
+import { Users, Plus, Search, Globe, Lock, Loader2, MapPin, LogOut, FileText, Trash2, AlertTriangle } from 'lucide-react'
 import { OnboardingWizard, type WizardData } from '@/components/community/onboarding-wizard'
 
 const WIZARD_STORAGE_KEY = 'civildefence_wizard_draft'
@@ -21,7 +23,9 @@ interface CommunityWithMembership extends Community {
 }
 
 export default function CommunityPage() {
+  const router = useRouter()
   const { user } = useAuth()
+  const { refreshCommunities, setActiveCommunity } = useCommunity()
   const [communities, setCommunities] = useState<CommunityWithMembership[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -29,6 +33,8 @@ export default function CommunityPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [joiningId, setJoiningId] = useState<string | null>(null)
   const [leavingId, setLeavingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [showCreateWizard, setShowCreateWizard] = useState(false)
   const [hasSavedDraft, setHasSavedDraft] = useState(false)
 
@@ -151,6 +157,78 @@ export default function CommunityPage() {
     }
   }
 
+  const deleteCommunity = async (communityId: string) => {
+    if (!user) return
+
+    try {
+      setDeletingId(communityId)
+      setError(null)
+
+      // Delete related data first (order matters due to foreign keys)
+      // Delete community map points
+      await supabase
+        .from('community_map_points')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete community groups
+      await supabase
+        .from('community_groups')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete community guides
+      await supabase
+        .from('community_guides')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete community members
+      await supabase
+        .from('community_members')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete community events
+      await supabase
+        .from('community_events')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete invitations
+      await supabase
+        .from('community_invitations')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Delete alert rules (table not in typed schema yet)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('community_alert_rules')
+        .delete()
+        .eq('community_id', communityId)
+
+      // Finally delete the community itself
+      const { error } = await supabase
+        .from('communities')
+        .delete()
+        .eq('id', communityId)
+        .eq('created_by', user.id) // Ensure only creator can delete
+
+      if (error) throw error
+
+      await fetchData()
+      setConfirmDeleteId(null)
+      setSuccess('Community deleted successfully')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      console.error('Error deleting community:', err)
+      setError('Failed to delete community. Make sure you are the community creator.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   const handleWizardComplete = async (wizardData: WizardData) => {
     if (!user) return
 
@@ -189,6 +267,23 @@ export default function CommunityPage() {
           user_id: user.id,
           role: 'admin'
         })
+
+      // Create the meeting point as a map point so it shows on the dashboard map
+      if (wizardData.meetingPointLat && wizardData.meetingPointLng) {
+        await supabase.from('community_map_points').insert({
+          community_id: community.id,
+          name: wizardData.meetingPointName || 'Meeting Point',
+          description: 'Community emergency meeting point',
+          point_type: 'meeting_point',
+          icon: 'location_on',
+          color: '#22C55E',
+          address: wizardData.meetingPointAddress || null,
+          lat: wizardData.meetingPointLat,
+          lng: wizardData.meetingPointLng,
+          is_active: true,
+          created_by: user.id,
+        })
+      }
 
       // Create groups if any
       if (wizardData.groups.length > 0) {
@@ -291,14 +386,72 @@ export default function CommunityPage() {
         }
       }
 
-      await fetchData()
-      setShowCreateWizard(false)
-      setSuccess('Community created successfully! Redirecting to management page...')
+      // Send invitations if any were added
+      if (wizardData.invitations && wizardData.invitations.length > 0) {
+        const invitationPromises = wizardData.invitations.map(async (invitation) => {
+          const token = crypto.randomUUID()
+          const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
 
-      // Redirect to community management page
-      setTimeout(() => {
-        window.location.href = `/community/${community.id}/manage`
-      }, 1500)
+          // Create invitation record in database
+          const { data: invitationRecord, error: invitationError } = await supabase
+            .from('community_invitations')
+            .insert({
+              community_id: community.id,
+              email: invitation.email,
+              role: invitation.role,
+              invited_by: user.id,
+              token,
+              status: 'pending',
+              expires_at: expiresAt,
+            })
+            .select()
+            .single()
+
+          if (invitationError) {
+            console.error('Error creating invitation:', invitationError)
+            return null
+          }
+
+          // Send invitation email
+          try {
+            await fetch('/api/invite', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                invitationId: invitationRecord.id,
+                communityId: community.id,
+                email: invitation.email,
+                role: invitation.role,
+                invitedBy: user.id,
+                token,
+              }),
+            })
+          } catch (emailError) {
+            console.error('Error sending invitation email:', emailError)
+          }
+
+          return invitationRecord
+        })
+
+        await Promise.all(invitationPromises)
+      }
+
+      await fetchData()
+
+      // Refresh the community context and set the new community as active
+      await refreshCommunities()
+
+      // Set the new community as active in context and localStorage
+      // Use type assertion since we know the community object is valid
+      const newCommunityWithRole = {
+        ...community,
+        member_count: 1,
+        userRole: 'admin' as const,
+      }
+      setActiveCommunity(newCommunityWithRole as Parameters<typeof setActiveCommunity>[0])
+
+      // Don't close the wizard or redirect - let the wizard show the promotion step
+      // The wizard will call onCancel when the user clicks "Done" on the promo step
     } catch (err) {
       console.error('Error creating community:', err)
       setError('Failed to create community. Please try again.')
@@ -389,9 +542,6 @@ export default function CommunityPage() {
                         </p>
                       )}
                     </div>
-                    {community.memberRole === 'admin' && (
-                      <Crown className="h-4 w-4 text-yellow-500" />
-                    )}
                   </div>
                   <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                     {community.location && (
@@ -405,17 +555,68 @@ export default function CommunityPage() {
                       {community.member_count} members
                     </div>
                   </div>
+                  {/* Delete confirmation inline */}
+                  {confirmDeleteId === community.id && (
+                    <div className="mt-4 p-3 rounded-lg border-2 border-destructive bg-destructive/5">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-destructive">Delete this community?</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            This will permanently delete all data including members, events, guides, and map points.
+                          </p>
+                          <div className="flex gap-2 mt-3">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteCommunity(community.id)}
+                              disabled={deletingId === community.id}
+                            >
+                              {deletingId === community.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                              ) : (
+                                <Trash2 className="h-4 w-4 mr-1" />
+                              )}
+                              Yes, Delete
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setConfirmDeleteId(null)}
+                              disabled={deletingId === community.id}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-4 flex gap-2">
                     {community.memberRole === 'admin' ? (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="flex-1"
-                        onClick={() => window.location.href = `/community/${community.id}/manage`}
-                      >
-                        <Crown className="mr-1 h-3 w-3" />
-                        Manage
-                      </Button>
+                      <>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => window.location.href = `/community/${community.id}/manage`}
+                        >
+                          Manage
+                        </Button>
+                        {community.created_by === user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => setConfirmDeleteId(community.id)}
+                            disabled={deletingId === community.id || confirmDeleteId === community.id}
+                            title="Delete community"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </>
                     ) : (
                       <Button
                         variant="outline"
@@ -433,6 +634,7 @@ export default function CommunityPage() {
                         className="text-destructive hover:text-destructive"
                         onClick={() => leaveCommunity(community.id)}
                         disabled={leavingId === community.id}
+                        title="Leave community"
                       >
                         {leavingId === community.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -531,6 +733,11 @@ export default function CommunityPage() {
           userId={user?.id || ''}
           onComplete={handleWizardComplete}
           onCancel={() => setShowCreateWizard(false)}
+          onDone={() => {
+            // Called when user finishes the promo step after community creation
+            setShowCreateWizard(false)
+            router.push('/dashboard')
+          }}
         />
       )}
     </div>

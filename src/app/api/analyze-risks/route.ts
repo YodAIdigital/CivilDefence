@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { DisasterType } from '@/data/guide-templates'
+import { getPromptConfigByType, DEFAULT_PROMPTS } from '@/lib/ai-prompts'
 
 const DISASTER_TYPES: DisasterType[] = [
   'fire',
@@ -11,13 +12,17 @@ const DISASTER_TYPES: DisasterType[] = [
   'snow',
   'pandemic',
   'solar_storm',
-  'invasion'
+  'invasion',
+  'volcano',
+  'tornado',
+  'heat_wave'
 ]
 
 interface RiskAnalysisRequest {
   location: string
   latitude?: number | null
   longitude?: number | null
+  regionMapImage?: string | null // Base64 encoded map image with region overlay
 }
 
 interface RiskAnalysisResponse {
@@ -33,7 +38,12 @@ interface RiskAnalysisResponse {
 export async function POST(request: NextRequest) {
   try {
     const body: RiskAnalysisRequest = await request.json()
-    const { location, latitude, longitude } = body
+    const { location, latitude, longitude, regionMapImage } = body
+
+    console.log('[analyze-risks] Request received:')
+    console.log('[analyze-risks] - Location:', location)
+    console.log('[analyze-risks] - Coordinates:', latitude, longitude)
+    console.log('[analyze-risks] - Has regionMapImage:', !!regionMapImage, regionMapImage ? `(${regionMapImage.length} chars)` : '')
 
     if (!location) {
       return NextResponse.json(
@@ -54,66 +64,124 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Initialize Gemini (using Gemini 2.0 Flash - stable model)
+    // Get prompt configuration from AI settings
+    const promptConfig = await getPromptConfigByType('region_analysis')
+    const promptTemplate = promptConfig?.prompt_template || DEFAULT_PROMPTS.region_analysis.prompt_template
+    const modelId = promptConfig?.model_id || DEFAULT_PROMPTS.region_analysis.model_id
+
+    // Initialize Gemini with model from settings
     const genAI = new GoogleGenerativeAI(apiKey)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    const model = genAI.getGenerativeModel({ model: modelId })
 
-    // Create detailed prompt
-    const prompt = `You are an emergency preparedness expert analyzing regional disaster risks.
+    // Interpolate the prompt template with location data
+    // Support both old format {{regionName}} and new format {{location}}
+    let prompt = promptTemplate
+      .replace(/\{\{location\}\}/g, location)
+      .replace(/\{\{regionName\}\}/g, location) // Support old template format
+      .replace(/\{\{coordinates\}\}/g, latitude && longitude ? `Coordinates: ${latitude}, ${longitude}` : '')
+      .replace(/\{\{disaster_types\}\}/g, DISASTER_TYPES.join(', '))
 
-Location: ${location}
-${latitude && longitude ? `Coordinates: ${latitude}, ${longitude}` : ''}
+    // ALWAYS append JSON output instructions to ensure consistent response format
+    // This is critical for parsing - custom prompts may not include the correct format
+    prompt += `
 
-Analyze this specific region and provide a comprehensive risk assessment for emergency preparedness planning. Consider:
-
-1. Geographic factors (elevation, proximity to water, geology, climate)
-2. Historical disaster patterns in this specific area
-3. Seasonal risks and weather patterns
-4. Infrastructure and urban planning considerations
-5. Regional vulnerabilities
-
-For each relevant disaster type from this list: fire, flood, strong_winds, earthquake, tsunami, snow, pandemic, solar_storm, invasion
-
-Provide your response in this exact JSON format:
+CRITICAL OUTPUT FORMAT REQUIREMENT:
+You MUST respond with valid JSON in this exact format. Do not include any text before or after the JSON:
 {
   "regionalInfo": "A 2-3 sentence overview of the region's geographic and climate context",
   "risks": [
     {
-      "type": "earthquake",
-      "severity": "high",
+      "type": "disaster_type_from_list",
+      "severity": "high|medium|low",
       "description": "Brief explanation of why this risk exists in this region",
-      "recommendedActions": ["Specific action 1", "Specific action 2", "Specific action 3"]
+      "recommendedActions": ["Action 1", "Action 2", "Action 3"]
     }
   ]
 }
 
-Rules:
-- Only include risks that are genuinely relevant to this specific location
-- Severity must be: "low", "medium", or "high"
-- Type must match exactly from the list provided
-- Include 3-5 specific, actionable recommendations per risk
-- Focus on realistic, location-specific threats
-- Order risks by severity (high to low)
-- Return ONLY the JSON, no additional text
+Valid disaster types (use ONLY these exact values): ${DISASTER_TYPES.join(', ')}
+Severity must be exactly one of: "low", "medium", "high"
+Include 3-5 most relevant risks for this location, ordered by severity (high to low).
+Return ONLY the JSON object, no markdown formatting, no code blocks, no explanations.`
 
-JSON response:`
+    console.log('[analyze-risks] Model:', modelId)
+    console.log('[analyze-risks] Using custom prompt:', !!promptConfig)
+    console.log('[analyze-risks] Prompt length:', prompt.length)
 
-    // Call Gemini API
-    const result = await model.generateContent(prompt)
+    // Build content parts for multimodal request
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = []
+
+    // If we have a region map image, add it first for visual context
+    if (regionMapImage) {
+      // Extract base64 data from data URL (format: data:image/png;base64,xxxxx)
+      const base64Match = regionMapImage.match(/^data:([^;]+);base64,(.+)$/)
+      if (base64Match) {
+        const mimeType = base64Match[1] || 'image/png'
+        const base64Data = base64Match[2] || ''
+        console.log('[analyze-risks] Adding map image to request, mimeType:', mimeType, 'base64 length:', base64Data.length)
+
+        // Add image context instruction
+        parts.push({
+          text: 'The following image shows the community region boundaries on a map. Use this visual context to better understand the geographical area, terrain features, nearby water bodies, urban density, and potential hazard zones when analyzing risks.\n\n'
+        })
+
+        // Add the image
+        parts.push({
+          inlineData: {
+            mimeType,
+            data: base64Data,
+          }
+        })
+      } else {
+        console.log('[analyze-risks] Failed to parse regionMapImage data URL')
+      }
+    } else {
+      console.log('[analyze-risks] No regionMapImage provided')
+    }
+
+    // Add the main prompt
+    parts.push({ text: prompt })
+
+    // Call Gemini API with multimodal content
+    console.log('[analyze-risks] Calling Gemini API...')
+    let result
+    try {
+      result = await model.generateContent(parts)
+    } catch (apiError) {
+      console.error('[analyze-risks] Gemini API call failed:', apiError)
+      throw new Error(`Gemini API error: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`)
+    }
+
     const response = await result.response
     const text = response.text()
+    console.log('[analyze-risks] Raw response length:', text.length)
+    console.log('[analyze-risks] Raw response (first 500 chars):', text.substring(0, 500))
 
     // Parse the JSON response
     let analysisData: RiskAnalysisResponse
     try {
-      // Extract JSON from response (in case there's extra text)
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      // Extract JSON from response (in case there's extra text or markdown code blocks)
+      // First try to find JSON object directly
+      let jsonMatch = text.match(/\{[\s\S]*\}/)
+
+      // If wrapped in markdown code blocks, extract from there
       if (!jsonMatch) {
+        const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+        if (codeBlockMatch && codeBlockMatch[1]) {
+          jsonMatch = codeBlockMatch[1].match(/\{[\s\S]*\}/)
+        }
+      }
+
+      if (!jsonMatch) {
+        console.error('[analyze-risks] No JSON found in response. Full response:', text)
         throw new Error('No JSON found in response')
       }
+
+      console.log('[analyze-risks] Extracted JSON (first 300 chars):', jsonMatch[0].substring(0, 300))
       analysisData = JSON.parse(jsonMatch[0])
-    } catch {
-      console.error('Failed to parse Gemini response:', text)
+    } catch (parseError) {
+      console.error('[analyze-risks] Failed to parse Gemini response:', text)
+      console.error('[analyze-risks] Parse error:', parseError)
       throw new Error('Invalid response format from AI')
     }
 

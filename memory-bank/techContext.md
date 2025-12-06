@@ -35,6 +35,14 @@
 - Row Level Security (RLS)
 - Edge Functions for custom logic
 
+### AI Integration
+**Google Gemini API**
+- ALWAYS use the Gemini API key to create AI functions. Use the latest model, and always search for the latest API documentation whenever making edits or adding new features.
+- Text generation for community guides
+- Image generation for social media
+- Custom prompt engineering
+- Model fine-tuning capabilities
+
 ### PWA & Offline
 **Workbox + Custom Service Worker**
 - Workbox for caching strategies

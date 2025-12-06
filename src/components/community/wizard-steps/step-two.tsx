@@ -1,12 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Loader2,
-  Sparkles,
   AlertTriangle,
   CheckCircle2,
   Flame,
@@ -23,7 +22,10 @@ import {
   Trash2,
   ChevronDown,
   ChevronUp,
-  Edit2
+  Edit2,
+  Mountain,
+  Tornado,
+  Thermometer,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { WizardData } from '../onboarding-wizard'
@@ -51,15 +53,26 @@ const DISASTER_ICONS: Record<DisasterType, typeof Flame> = {
   pandemic: Biohazard,
   solar_storm: Zap,
   invasion: Shield,
+  volcano: Mountain,
+  tornado: Tornado,
+  heat_wave: Thermometer,
 }
 
 export function StepTwo({ data, updateData }: StepTwoProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [isCustomizing, setIsCustomizing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [customizationSuccess, setCustomizationSuccess] = useState(false)
   const [showEmergencyContacts, setShowEmergencyContacts] = useState(false)
   const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null)
+  const hasAutoAnalyzed = useRef(false)
+  const hasGeneratedMapImage = useRef(false)
+
+  // Auto-analyze when component mounts (if not already analyzed)
+  useEffect(() => {
+    if (!hasAutoAnalyzed.current && !data.aiAnalysis && data.location && !isAnalyzing) {
+      hasAutoAnalyzed.current = true
+      handleAnalyze()
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnalyze = async () => {
     if (!data.location) {
@@ -70,6 +83,8 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
     setIsAnalyzing(true)
     setError(null)
 
+    console.log('[StepTwo] Analyzing risks with map image:', !!data.regionMapImage, data.regionMapImage ? `(${data.regionMapImage.length} chars)` : '')
+
     try {
       const response = await fetch('/api/analyze-risks', {
         method: 'POST',
@@ -78,6 +93,7 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
           location: data.location,
           latitude: data.meetingPointLat,
           longitude: data.meetingPointLng,
+          regionMapImage: data.regionMapImage, // Pass the map image for visual context
         }),
       })
 
@@ -92,7 +108,7 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
       })
     } catch (err) {
       console.error('Error analyzing risks:', err)
-      setError('Failed to analyze regional risks. Please try again or select risks manually.')
+      setError('Failed to analyze regional risks. Please select risks manually.')
     } finally {
       setIsAnalyzing(false)
     }
@@ -105,57 +121,6 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
         ? data.selectedRisks.filter(r => r !== riskType)
         : [...data.selectedRisks, riskType],
     })
-  }
-
-  const handleCustomizeGuides = async () => {
-    if (data.selectedRisks.length === 0) {
-      setError('Please select at least one risk type first')
-      return
-    }
-
-    setIsCustomizing(true)
-    setError(null)
-    setCustomizationSuccess(false)
-
-    try {
-      const response = await fetch('/api/customize-guides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: data.location,
-          latitude: data.meetingPointLat,
-          longitude: data.meetingPointLng,
-          selectedRisks: data.selectedRisks,
-          aiAnalysis: data.aiAnalysis,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to customize guides')
-      }
-
-      const result = await response.json()
-
-      // Convert array to record keyed by risk type
-      const customizations: Record<string, any> = {}
-      result.customizedGuides.forEach((guide: any) => {
-        if (guide && guide.customization) {
-          customizations[guide.riskType] = guide.customization
-        }
-      })
-
-      updateData({
-        guideCustomizations: customizations
-      })
-
-      setCustomizationSuccess(true)
-      setTimeout(() => setCustomizationSuccess(false), 3000)
-    } catch (err) {
-      console.error('Error customizing guides:', err)
-      setError('Failed to customize response plans. Default templates will be used.')
-    } finally {
-      setIsCustomizing(false)
-    }
   }
 
   const getSeverityColor = (severity: 'low' | 'medium' | 'high') => {
@@ -259,57 +224,68 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
 
   const emergencyContacts = getAllEmergencyContacts()
 
+  // Auto-generate map image if we have a polygon but no image (e.g., resuming from saved state)
+  // Use ref to prevent infinite loop from updateData dependency
+  useEffect(() => {
+    const generateMapImage = async () => {
+      if (hasGeneratedMapImage.current) return
+      if (data.regionPolygon && data.regionPolygon.length >= 3 && !data.regionMapImage) {
+        hasGeneratedMapImage.current = true
+        console.log('[StepTwo] Polygon exists but no map image - generating...')
+        try {
+          const response = await fetch('/api/generate-map-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              coordinates: data.regionPolygon,
+              meetingPoint: data.meetingPointLat && data.meetingPointLng
+                ? { lat: data.meetingPointLat, lng: data.meetingPointLng }
+                : null,
+              regionColor: data.regionColor || '#FEB100',
+            }),
+          })
+
+          if (response.ok) {
+            const result = await response.json()
+            if (result.success && result.imageUrl) {
+              console.log('[StepTwo] Map image generated successfully, size:', result.imageUrl.length, 'chars')
+              updateData({ regionMapImage: result.imageUrl })
+            }
+          }
+        } catch (error) {
+          console.error('[StepTwo] Failed to generate map image:', error)
+        }
+      }
+    }
+
+    generateMapImage()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Show loading state while analyzing
+  if (isAnalyzing) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <div className="text-center">
+          <h3 className="text-lg font-semibold mb-2">Analysing Your Region</h3>
+          <p className="text-muted-foreground text-sm">
+            AI is identifying potential risks and hazards for your area...
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-semibold mb-2">Risk Assessment</h3>
         <p className="text-muted-foreground text-sm">
-          Let AI analyze your region to identify potential risks and recommend response plans.
+          {data.aiAnalysis
+            ? 'AI has analyzed your region. Review the identified risks below.'
+            : 'Select the risks relevant to your community area.'}
         </p>
       </div>
-
-      {/* AI Analysis Button */}
-      {!data.aiAnalysis && (
-        <Card className="p-6 bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-950 dark:to-purple-950 border-2 border-dashed">
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className="rounded-full bg-primary/10 p-3">
-                <Sparkles className="h-8 w-8 text-primary" />
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold text-lg mb-2">AI-Powered Risk Analysis</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Use Gemini AI to analyze your location and identify specific risks for your area,
-                including natural disasters, seasonal hazards, and regional vulnerabilities.
-              </p>
-            </div>
-            <Button
-              onClick={handleAnalyze}
-              disabled={isAnalyzing || !data.location}
-              size="lg"
-              className="gap-2"
-            >
-              {isAnalyzing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Analyzing Region...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  Analyze My Region
-                </>
-              )}
-            </Button>
-            {!data.location && (
-              <p className="text-xs text-muted-foreground">
-                Set your location in Step 1 to enable AI analysis
-              </p>
-            )}
-          </div>
-        </Card>
-      )}
 
       {error && (
         <Alert variant="destructive">
@@ -321,18 +297,9 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
       {/* AI Analysis Results */}
       {data.aiAnalysis && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-600" />
-              <h4 className="font-semibold">Analysis Complete</h4>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleAnalyze} disabled={isAnalyzing}>
-              {isAnalyzing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                'Re-analyze'
-              )}
-            </Button>
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5 text-green-600" />
+            <h4 className="font-semibold">Analysis Complete</h4>
           </div>
 
           {/* Regional Information */}
@@ -429,62 +396,6 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
           })}
         </div>
       </div>
-
-      {/* Customize Response Plans Button */}
-      {data.selectedRisks.length > 0 && (
-        <Card className="p-6 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950 dark:to-pink-950 border-2 border-dashed border-purple-200">
-          <div className="flex items-start gap-4">
-            <div className="rounded-full bg-purple-100 dark:bg-purple-900 p-3">
-              <Sparkles className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-            </div>
-            <div className="flex-1">
-              <h4 className="font-semibold mb-2">Customize Response Plans for Your Area</h4>
-              <p className="text-sm text-muted-foreground mb-4">
-                Use AI to customize the emergency response plans with location-specific information including local emergency services, shelters, evacuation routes, and region-specific preparation steps for {data.location || 'your area'}.
-              </p>
-              {customizationSuccess && (
-                <Alert className="mb-4 bg-green-50 border-green-200">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  <AlertDescription className="text-green-800">
-                    Response plans customized successfully! Location-specific information will be included in your guides.
-                  </AlertDescription>
-                </Alert>
-              )}
-              <div className="flex gap-3">
-                <Button
-                  onClick={handleCustomizeGuides}
-                  disabled={isCustomizing}
-                  variant={data.guideCustomizations ? "outline" : "default"}
-                  className="gap-2"
-                >
-                  {isCustomizing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Customizing...
-                    </>
-                  ) : data.guideCustomizations ? (
-                    <>
-                      <CheckCircle2 className="h-4 w-4" />
-                      Re-customize Plans
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      Customize Response Plans
-                    </>
-                  )}
-                </Button>
-                {data.guideCustomizations && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <CheckCircle2 className="h-4 w-4 text-green-600" />
-                    <span>Plans customized for {Object.keys(data.guideCustomizations).length} risk(s)</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Card>
-      )}
 
       {/* Emergency Contacts Section */}
       {(emergencyContacts.length > 0 || data.guideCustomizations) && (

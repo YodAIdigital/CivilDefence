@@ -10,6 +10,39 @@ import type {
 import { IconPicker } from '@/components/ui/icon-picker'
 import { ColorPicker } from '@/components/ui/color-picker'
 
+// Convert legacy Tailwind gradient classes to hex colors
+function normalizeColor(color: string): string {
+  // If it's already a hex color, return it
+  if (color.startsWith('#')) {
+    return color
+  }
+
+  // Map of gradient class patterns to solid hex colors
+  const gradientToHex: Record<string, string> = {
+    'from-orange-500 to-red-600': '#ea580c',      // Fire - orange
+    'from-blue-500 to-cyan-600': '#0891b2',       // Flood - cyan
+    'from-slate-500 to-gray-700': '#64748b',      // Strong winds - slate
+    'from-amber-600 to-yellow-700': '#d97706',    // Earthquake - amber
+    'from-blue-600 to-indigo-700': '#4f46e5',     // Tsunami - indigo
+    'from-sky-400 to-blue-600': '#0ea5e9',        // Snow - sky blue
+    'from-green-500 to-emerald-700': '#059669',   // Pandemic - emerald
+    'from-yellow-500 to-orange-600': '#eab308',   // Solar storm - yellow
+    'from-red-600 to-rose-800': '#dc2626',        // Invasion - red
+    'from-red-500 to-orange-600': '#ef4444',      // Volcano - red-orange
+    'from-gray-500 to-slate-700': '#475569',      // Tornado - gray-slate
+    'from-orange-400 to-red-500': '#f97316',      // Heat wave - orange
+  }
+
+  // Check if the color matches a known gradient
+  const hex = gradientToHex[color]
+  if (hex) {
+    return hex
+  }
+
+  // Default fallback
+  return '#3b82f6'
+}
+
 interface GuideEditorProps {
   guide: Partial<CommunityGuide>
   onSave: (guide: Partial<CommunityGuide>) => Promise<void>
@@ -32,7 +65,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
   const [name, setName] = useState(guide.name || '')
   const [description, setDescription] = useState(guide.description || '')
   const [icon, setIcon] = useState(guide.icon || 'menu_book')
-  const [color, setColor] = useState(guide.color || '#3b82f6')
+  const [color, setColor] = useState(normalizeColor(guide.color || '#3b82f6'))
   const [isActive, setIsActive] = useState(guide.is_active ?? false)
   const [customNotes, setCustomNotes] = useState(guide.custom_notes || '')
 
@@ -297,7 +330,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
         <div className="flex items-center gap-3">
@@ -326,7 +359,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
       )}
 
       {/* Tabs */}
-      <div className="mb-4 flex gap-1 overflow-x-auto pb-2">
+      <div className="mb-4 flex flex-wrap gap-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -344,10 +377,40 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
       </div>
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div>
         {/* Details Tab */}
         {activeTab === 'details' && (
-          <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-4">
+              <input
+                type="checkbox"
+                id="isActive"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+                className="h-5 w-5 rounded border-border text-primary"
+              />
+              <label htmlFor="isActive" className="flex-1">
+                <span className="font-medium">{isActive ? 'Active' : 'Draft'}</span>
+              </label>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowIconPicker(true)}
+                  className="flex h-10 w-10 items-center justify-center rounded-lg bg-background border border-border hover:bg-muted transition-colors"
+                  title="Change icon"
+                >
+                  <span className="material-icons">{icon}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowColorPicker(true)}
+                  className="h-10 w-10 rounded-lg flex-shrink-0 border border-border hover:opacity-80 transition-opacity"
+                  style={{ backgroundColor: color }}
+                  title="Change color"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium mb-1">Plan Name *</label>
               <input
@@ -370,39 +433,6 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
               />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <label className="block text-sm font-medium mb-1">Icon</label>
-                <button
-                  type="button"
-                  onClick={() => setShowIconPicker(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 hover:bg-muted transition-colors"
-                >
-                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
-                    <span className="material-icons">{icon}</span>
-                  </div>
-                  <span className="flex-1 text-left text-muted-foreground">{icon}</span>
-                  <span className="material-icons text-muted-foreground">edit</span>
-                </button>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Color</label>
-                <button
-                  type="button"
-                  onClick={() => setShowColorPicker(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-border bg-background px-3 py-2 hover:bg-muted transition-colors"
-                >
-                  <div
-                    className="h-10 w-10 rounded-lg flex-shrink-0"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="flex-1 text-left text-muted-foreground font-mono">{color}</span>
-                  <span className="material-icons text-muted-foreground">edit</span>
-                </button>
-              </div>
-            </div>
-
             <div>
               <label className="block text-sm font-medium mb-1">Community Notes</label>
               <textarea
@@ -412,22 +442,6 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
                 className="w-full rounded-lg border border-border bg-background px-3 py-2"
                 placeholder="Add community-specific notes, local hazards, or special considerations..."
               />
-            </div>
-
-            <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/50 p-4">
-              <input
-                type="checkbox"
-                id="isActive"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="h-5 w-5 rounded border-border text-primary"
-              />
-              <label htmlFor="isActive" className="flex-1">
-                <span className="font-medium">Active</span>
-                <p className="text-sm text-muted-foreground">
-                  Only active guides are visible to community members
-                </p>
-              </label>
             </div>
           </div>
         )}
@@ -439,7 +453,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
 
         {/* Supplies Tab */}
         {activeTab === 'supplies' && (
-          <div className="space-y-4">
+          <div className="rounded-lg border border-border bg-card p-4 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold">Emergency Supplies Checklist</h3>
               <button

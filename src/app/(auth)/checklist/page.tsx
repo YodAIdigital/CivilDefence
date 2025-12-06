@@ -16,7 +16,16 @@ import { guideTemplates } from '@/data/guide-templates'
 
 type ItemStatus = 'ok' | 'warning' | 'overdue' | 'unchecked'
 
-const CHECKLIST_STORAGE_KEY = 'civildefence_checklist_v2'
+const CHECKLIST_STORAGE_KEY_PREFIX = 'civildefence_checklist_v2'
+
+// Helper to get community-specific storage key
+function getStorageKey(communityId: string | null): string {
+  if (communityId) {
+    return `${CHECKLIST_STORAGE_KEY_PREFIX}_${communityId}`
+  }
+  // Fallback for users without a community (shouldn't happen in normal flow)
+  return `${CHECKLIST_STORAGE_KEY_PREFIX}_default`
+}
 
 // Storage format for checked items
 interface StoredChecklistData {
@@ -69,10 +78,11 @@ export default function ChecklistPage() {
   const [responsePlans, setResponsePlans] = useState<ResponsePlanSupplies[]>([])
   const [showPersonalizationInfo, setShowPersonalizationInfo] = useState(false)
 
-  // Load stored checklist state from localStorage
+  // Load stored checklist state from localStorage (community-specific)
   const loadStoredData = useCallback((): StoredChecklistData | null => {
     try {
-      const stored = localStorage.getItem(CHECKLIST_STORAGE_KEY)
+      const storageKey = getStorageKey(activeCommunity?.id || null)
+      const stored = localStorage.getItem(storageKey)
       if (stored) {
         return JSON.parse(stored)
       }
@@ -80,11 +90,12 @@ export default function ChecklistPage() {
       // Ignore localStorage errors
     }
     return null
-  }, [])
+  }, [activeCommunity?.id])
 
-  // Save checklist state to localStorage
+  // Save checklist state to localStorage (community-specific)
   const saveStoredData = useCallback((categories: ChecklistCategory[]) => {
     try {
+      const storageKey = getStorageKey(activeCommunity?.id || null)
       const items: Record<string, { checked: boolean; lastChecked?: string }> = {}
       for (const category of categories) {
         for (const item of category.items) {
@@ -101,11 +112,11 @@ export default function ChecklistPage() {
         items,
         lastUpdated: new Date().toISOString(),
       }
-      localStorage.setItem(CHECKLIST_STORAGE_KEY, JSON.stringify(data))
+      localStorage.setItem(storageKey, JSON.stringify(data))
     } catch {
       // Ignore localStorage errors
     }
-  }, [])
+  }, [activeCommunity?.id])
 
   // Apply stored data to generated checklist
   const applyStoredData = useCallback(
@@ -411,12 +422,12 @@ export default function ChecklistPage() {
                 <span className="font-medium text-sm">Response Plans</span>
               </div>
               {responsePlans.length > 0 ? (
-                <div className="space-y-1 text-xs text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   {responsePlans.map((plan, i) => (
-                    <p key={i} className="flex items-center gap-1">
+                    <div key={i} className="inline-flex items-center gap-1 mr-1">
                       <span className="material-icons text-xs">{plan.planIcon}</span>
-                      {plan.planName}
-                    </p>
+                      {plan.planName}{i < responsePlans.length - 1 ? ',' : ''}
+                    </div>
                   ))}
                 </div>
               ) : (

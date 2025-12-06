@@ -9,12 +9,19 @@ interface CustomizeGuidesRequest {
   longitude?: number | null
   selectedRisks: DisasterType[]
   aiAnalysis?: any
+  regionMapImage?: string | null // Base64 encoded map image with region overlay
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body: CustomizeGuidesRequest = await request.json()
-    const { location, latitude, longitude, selectedRisks, aiAnalysis } = body
+    const { location, latitude, longitude, selectedRisks, aiAnalysis, regionMapImage } = body
+
+    console.log('[customize-guides] Request received:')
+    console.log('[customize-guides] - Location:', location)
+    console.log('[customize-guides] - Coordinates:', latitude, longitude)
+    console.log('[customize-guides] - Selected risks:', selectedRisks)
+    console.log('[customize-guides] - Has regionMapImage:', !!regionMapImage, regionMapImage ? `(${regionMapImage.length} chars)` : '')
 
     if (!location || !selectedRisks || selectedRisks.length === 0) {
       return NextResponse.json(
@@ -115,7 +122,37 @@ Provide real, researched information for ${location}. If you don't have specific
 JSON response:`
 
         try {
-          const result = await model.generateContent(prompt)
+          // Build content parts for the request
+          const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+            { text: prompt }
+          ]
+
+          // If we have a region map image, add it to the request for visual context
+          if (regionMapImage) {
+            // Extract base64 data from data URL (format: data:image/png;base64,xxxxx)
+            const base64Match = regionMapImage.match(/^data:([^;]+);base64,(.+)$/)
+            if (base64Match) {
+              const mimeType = base64Match[1] || 'image/png'
+              const base64Data = base64Match[2] || ''
+              console.log('[customize-guides] Adding image to Gemini request, mimeType:', mimeType, 'base64 length:', base64Data.length)
+              parts.unshift({
+                inlineData: {
+                  mimeType,
+                  data: base64Data,
+                }
+              })
+              // Add context about the image at the beginning of the prompt
+              parts.unshift({
+                text: 'The following image shows the community region boundaries on a map. Use this visual context to better understand the geographical area and provide more accurate location-specific recommendations.\n\n'
+              })
+            } else {
+              console.log('[customize-guides] Failed to parse regionMapImage data URL')
+            }
+          } else {
+            console.log('[customize-guides] No regionMapImage provided for', riskType)
+          }
+
+          const result = await model.generateContent(parts)
           const response = await result.response
           const text = response.text()
 

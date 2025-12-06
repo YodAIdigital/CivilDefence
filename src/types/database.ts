@@ -984,6 +984,58 @@ export interface Database {
           }
         ]
       }
+      community_invitations: {
+        Row: {
+          id: string
+          community_id: string
+          email: string
+          role: CommunityRole
+          invited_by: string
+          token: string
+          status: 'pending' | 'accepted' | 'expired' | 'cancelled'
+          expires_at: string
+          created_at: string
+          accepted_at: string | null
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          email: string
+          role?: CommunityRole
+          invited_by: string
+          token: string
+          status?: 'pending' | 'accepted' | 'expired' | 'cancelled'
+          expires_at: string
+          created_at?: string
+          accepted_at?: string | null
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          email?: string
+          role?: CommunityRole
+          invited_by?: string
+          token?: string
+          status?: 'pending' | 'accepted' | 'expired' | 'cancelled'
+          expires_at?: string
+          created_at?: string
+          accepted_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'community_invitations_community_id_fkey'
+            columns: ['community_id']
+            referencedRelation: 'communities'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'community_invitations_invited_by_fkey'
+            columns: ['invited_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -2067,6 +2119,178 @@ export const GROUP_COLOR_OPTIONS = [
   { value: '#ec4899', label: 'Pink' },
   { value: '#6b7280', label: 'Gray' },
 ] as const
+
+// ==========================================
+// AI Prompt Configuration Types
+// ==========================================
+
+// Social style types
+export type SocialStyleType = 'community' | 'professional' | 'emergency' | 'modern'
+
+// Social style options for UI
+export const SOCIAL_STYLE_OPTIONS = [
+  { value: 'community' as const, label: 'Community', description: 'Warm, welcoming tone' },
+  { value: 'professional' as const, label: 'Professional', description: 'Trust-inspiring, formal' },
+  { value: 'emergency' as const, label: 'Emergency', description: 'Safety-focused theme' },
+  { value: 'modern' as const, label: 'Modern', description: 'Minimalist, clean' },
+] as const
+
+// AI function types that can be configured
+// Social functions have style variants (e.g., social_post_community, social_image_professional)
+export type AIFunctionType =
+  | 'region_analysis'
+  | 'plan_customization'
+  | 'social_post_community'
+  | 'social_post_professional'
+  | 'social_post_emergency'
+  | 'social_post_modern'
+  | 'social_image_community'
+  | 'social_image_professional'
+  | 'social_image_emergency'
+  | 'social_image_modern'
+  | 'emergency_contact_localization'
+
+// Helper to get function type from base type and style
+export function getSocialFunctionType(baseType: 'social_post' | 'social_image', style: SocialStyleType): AIFunctionType {
+  return `${baseType}_${style}` as AIFunctionType
+}
+
+// AI prompt configuration (stored in database)
+export interface AIPromptConfig {
+  id: string
+  function_type: AIFunctionType
+  name: string
+  description: string | null
+  prompt_template: string
+  model_id: string
+  is_active: boolean
+  created_by: string
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new AI prompt config
+export interface CreateAIPromptConfig {
+  function_type: AIFunctionType
+  name: string
+  description?: string
+  prompt_template: string
+  model_id: string
+  is_active?: boolean
+  created_by: string
+}
+
+// For updating an AI prompt config
+export interface UpdateAIPromptConfig {
+  name?: string
+  description?: string
+  prompt_template?: string
+  model_id?: string
+  is_active?: boolean
+  updated_by: string
+}
+
+// AI function configuration for display
+export const AI_FUNCTION_CONFIG = {
+  region_analysis: {
+    label: 'Region Analysis',
+    description: 'Analyzes a community region for emergency preparedness insights',
+    icon: 'map',
+    supportsImage: false,
+    category: 'general',
+  },
+  plan_customization: {
+    label: 'Response Plan Customization',
+    description: 'Customizes emergency response plans for specific communities',
+    icon: 'description',
+    supportsImage: false,
+    category: 'general',
+  },
+  // Social Post styles
+  social_post_community: {
+    label: 'Social Post - Community',
+    description: 'Warm, welcoming tone for community-focused posts',
+    icon: 'edit_note',
+    supportsImage: false,
+    category: 'social_post',
+    style: 'community' as SocialStyleType,
+  },
+  social_post_professional: {
+    label: 'Social Post - Professional',
+    description: 'Trust-inspiring, formal tone for professional posts',
+    icon: 'edit_note',
+    supportsImage: false,
+    category: 'social_post',
+    style: 'professional' as SocialStyleType,
+  },
+  social_post_emergency: {
+    label: 'Social Post - Emergency',
+    description: 'Safety-focused theme for emergency awareness posts',
+    icon: 'edit_note',
+    supportsImage: false,
+    category: 'social_post',
+    style: 'emergency' as SocialStyleType,
+  },
+  social_post_modern: {
+    label: 'Social Post - Modern',
+    description: 'Minimalist, clean style for modern appeal',
+    icon: 'edit_note',
+    supportsImage: false,
+    category: 'social_post',
+    style: 'modern' as SocialStyleType,
+  },
+  // Social Image styles
+  social_image_community: {
+    label: 'Social Image - Community',
+    description: 'Warm, welcoming imagery for community groups',
+    icon: 'image',
+    supportsImage: true,
+    category: 'social_image',
+    style: 'community' as SocialStyleType,
+  },
+  social_image_professional: {
+    label: 'Social Image - Professional',
+    description: 'Trust-inspiring, formal imagery',
+    icon: 'image',
+    supportsImage: true,
+    category: 'social_image',
+    style: 'professional' as SocialStyleType,
+  },
+  social_image_emergency: {
+    label: 'Social Image - Emergency',
+    description: 'Safety-focused emergency preparedness imagery',
+    icon: 'image',
+    supportsImage: true,
+    category: 'social_image',
+    style: 'emergency' as SocialStyleType,
+  },
+  social_image_modern: {
+    label: 'Social Image - Modern',
+    description: 'Minimalist, clean modern design',
+    icon: 'image',
+    supportsImage: true,
+    category: 'social_image',
+    style: 'modern' as SocialStyleType,
+  },
+  emergency_contact_localization: {
+    label: 'Emergency Contact Localization',
+    description: 'Localizes emergency contacts for specific regions',
+    icon: 'contacts',
+    supportsImage: false,
+    category: 'general',
+  },
+} as const
+
+// Gemini model info returned from API
+export interface GeminiModelInfo {
+  name: string
+  displayName: string
+  description: string
+  supportedGenerationMethods: string[]
+  inputTokenLimit?: number
+  outputTokenLimit?: number
+}
 
 // ==========================================
 // Community Region Types
