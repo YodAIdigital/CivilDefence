@@ -12,6 +12,7 @@ import { StepSix } from './wizard-steps/step-six'
 import type { DisasterType } from '@/data/guide-templates'
 
 const WIZARD_STORAGE_KEY = 'civildefence_wizard_draft'
+const WIZARD_COMPLETED_KEY = 'civildefence_wizard_completed'
 
 export interface WizardData {
   // Step 1: Basic Info
@@ -128,10 +129,23 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
   const [wizardData, setWizardData] = useState<WizardData>(DEFAULT_WIZARD_DATA)
   const [isInitialized, setIsInitialized] = useState(false)
   const [showPromoStep, setShowPromoStep] = useState(false) // Show promotion step after community is created
+  const [isCompleted, setIsCompleted] = useState(false) // Track if community was successfully created
 
   // Load saved state on mount
   useEffect(() => {
     try {
+      // Check if wizard was just completed - if so, show promo step
+      const justCompleted = localStorage.getItem(WIZARD_COMPLETED_KEY)
+      if (justCompleted) {
+        console.log('[Wizard] Wizard was just completed, showing promo step')
+        const completedData = JSON.parse(justCompleted)
+        setWizardData(completedData)
+        setShowPromoStep(true)
+        setIsCompleted(true)
+        setIsInitialized(true)
+        return
+      }
+
       const saved = localStorage.getItem(WIZARD_STORAGE_KEY)
       console.log('[Wizard] Loading saved state:', saved ? 'found' : 'none')
       if (saved) {
@@ -150,6 +164,7 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
     } catch (error) {
       console.error('Failed to load wizard state:', error)
       localStorage.removeItem(WIZARD_STORAGE_KEY)
+      localStorage.removeItem(WIZARD_COMPLETED_KEY)
     }
     // Mark as initialized after load attempt
     setIsInitialized(true)
@@ -175,12 +190,12 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
 
   // Auto-save on data or step changes
   useEffect(() => {
-    // Don't save if we're showing the resume prompt, promo step, or not yet initialized
-    console.log('[Wizard] Auto-save effect - isInitialized:', isInitialized, 'showResumePrompt:', showResumePrompt, 'showPromoStep:', showPromoStep)
-    if (isInitialized && !showResumePrompt && !showPromoStep) {
+    // Don't save if we're showing the resume prompt, promo step, completed, or not yet initialized
+    console.log('[Wizard] Auto-save effect - isInitialized:', isInitialized, 'showResumePrompt:', showResumePrompt, 'showPromoStep:', showPromoStep, 'isCompleted:', isCompleted)
+    if (isInitialized && !showResumePrompt && !showPromoStep && !isCompleted) {
       saveState()
     }
-  }, [wizardData, currentStep, showResumePrompt, showPromoStep, saveState, isInitialized])
+  }, [wizardData, currentStep, showResumePrompt, showPromoStep, isCompleted, saveState, isInitialized])
 
   // Clear saved state on completion
   const clearSavedState = useCallback(() => {
@@ -279,12 +294,16 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
     setIsSubmitting(true)
     try {
       await onComplete(wizardData)
-      // Clear saved state on successful completion
+      // Mark as completed FIRST to prevent any auto-save from re-saving
+      setIsCompleted(true)
+      // Clear draft state and save completed state (so if component remounts, we show promo)
       clearSavedState()
+      localStorage.setItem(WIZARD_COMPLETED_KEY, JSON.stringify(wizardData))
       setSavedState(null) // Also clear in-memory state to prevent resume prompt
       setShowResumePrompt(false) // Ensure resume prompt doesn't show
       // Show the promotion step after successful creation
       setShowPromoStep(true)
+      console.log('[Wizard] Community created successfully, showing promo step')
     } catch (error) {
       console.error('Error completing wizard:', error)
     } finally {
@@ -342,7 +361,11 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
             {/* Footer */}
             <div className="border-t p-4 sm:p-6 bg-gradient-to-r from-muted/50 via-muted/30 to-muted/50">
               <div className="flex items-center justify-end">
-                <Button onClick={() => onDone ? onDone() : onCancel()} className="gap-2">
+                <Button onClick={() => {
+                  // Clear the completed key so next time wizard opens fresh
+                  localStorage.removeItem(WIZARD_COMPLETED_KEY)
+                  onDone ? onDone() : onCancel()
+                }} className="gap-2">
                   <span>Done</span>
                   <ArrowRight className="h-4 w-4" />
                 </Button>
