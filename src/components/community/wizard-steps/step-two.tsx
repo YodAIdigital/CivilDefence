@@ -26,8 +26,6 @@ import {
   Mountain,
   Tornado,
   Thermometer,
-  Download,
-  ImageIcon,
 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import type { WizardData } from '../onboarding-wizard'
@@ -65,16 +63,23 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
   const [error, setError] = useState<string | null>(null)
   const [showEmergencyContacts, setShowEmergencyContacts] = useState(false)
   const [editingContactIndex, setEditingContactIndex] = useState<number | null>(null)
+  const [mapImageReady, setMapImageReady] = useState(!!data.regionMapImage)
   const hasAutoAnalyzed = useRef(false)
   const hasGeneratedMapImage = useRef(false)
 
-  // Auto-analyze when component mounts (if not already analyzed)
+  // Auto-analyze when map image is ready (or no polygon exists)
   useEffect(() => {
-    if (!hasAutoAnalyzed.current && !data.aiAnalysis && data.location && !isAnalyzing) {
+    const shouldAnalyze = !hasAutoAnalyzed.current &&
+                          !data.aiAnalysis &&
+                          data.location &&
+                          !isAnalyzing &&
+                          (mapImageReady || !data.regionPolygon || data.regionPolygon.length < 3)
+
+    if (shouldAnalyze) {
       hasAutoAnalyzed.current = true
       handleAnalyze()
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [mapImageReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAnalyze = async () => {
     if (!data.location) {
@@ -226,49 +231,54 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
 
   const emergencyContacts = getAllEmergencyContacts()
 
-  // Download the map image for debugging
-  const handleDownloadMapImage = () => {
-    if (!data.regionMapImage) return
-
-    const link = document.createElement('a')
-    link.href = data.regionMapImage
-    link.download = `region-map-${data.communityName || 'community'}.png`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-  }
-
   // Auto-generate map image if we have a polygon but no image (e.g., resuming from saved state)
   // Use ref to prevent infinite loop from updateData dependency
   useEffect(() => {
     const generateMapImage = async () => {
       if (hasGeneratedMapImage.current) return
-      if (data.regionPolygon && data.regionPolygon.length >= 3 && !data.regionMapImage) {
-        hasGeneratedMapImage.current = true
-        console.log('[StepTwo] Polygon exists but no map image - generating...')
-        try {
-          const response = await fetch('/api/generate-map-image', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              coordinates: data.regionPolygon,
-              meetingPoint: data.meetingPointLat && data.meetingPointLng
-                ? { lat: data.meetingPointLat, lng: data.meetingPointLng }
-                : null,
-              regionColor: data.regionColor || '#FEB100',
-            }),
-          })
 
-          if (response.ok) {
-            const result = await response.json()
-            if (result.success && result.imageUrl) {
-              console.log('[StepTwo] Map image generated successfully, size:', result.imageUrl.length, 'chars')
-              updateData({ regionMapImage: result.imageUrl })
-            }
+      // If map image already exists, mark as ready
+      if (data.regionMapImage) {
+        setMapImageReady(true)
+        return
+      }
+
+      // If no polygon, mark as ready (analysis can proceed without image)
+      if (!data.regionPolygon || data.regionPolygon.length < 3) {
+        setMapImageReady(true)
+        return
+      }
+
+      hasGeneratedMapImage.current = true
+      console.log('[StepTwo] Polygon exists but no map image - generating...')
+      try {
+        const response = await fetch('/api/generate-map-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            coordinates: data.regionPolygon,
+            meetingPoint: data.meetingPointLat && data.meetingPointLng
+              ? { lat: data.meetingPointLat, lng: data.meetingPointLng }
+              : null,
+            regionColor: data.regionColor || '#FEB100',
+          }),
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          if (result.success && result.imageUrl) {
+            console.log('[StepTwo] Map image generated successfully, size:', result.imageUrl.length, 'chars')
+            updateData({ regionMapImage: result.imageUrl })
+            setMapImageReady(true)
           }
-        } catch (error) {
-          console.error('[StepTwo] Failed to generate map image:', error)
+        } else {
+          // Even if image generation fails, allow analysis to proceed
+          setMapImageReady(true)
         }
+      } catch (error) {
+        console.error('[StepTwo] Failed to generate map image:', error)
+        // Even if image generation fails, allow analysis to proceed
+        setMapImageReady(true)
       }
     }
 
@@ -300,49 +310,6 @@ export function StepTwo({ data, updateData }: StepTwoProps) {
             : 'Select the risks relevant to your community area.'}
         </p>
       </div>
-
-      {/* Region Map Image Preview */}
-      {data.regionMapImage && (
-        <Card className="p-4 bg-muted/30 border-dashed">
-          <div className="flex items-start gap-4">
-            <div className="flex-shrink-0 w-32 h-24 rounded-lg overflow-hidden border bg-white">
-              <img
-                src={data.regionMapImage}
-                alt="Community region map"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <ImageIcon className="h-4 w-4 text-green-600" />
-                <span className="text-sm font-medium">Region Map Captured</span>
-              </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                This image will be sent to AI for regional analysis. The map shows your defined community boundaries.
-              </p>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDownloadMapImage}
-                className="gap-2"
-              >
-                <Download className="h-3 w-3" />
-                Download Image
-              </Button>
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Warning if no map image */}
-      {!data.regionMapImage && data.regionPolygon && data.regionPolygon.length >= 3 && (
-        <Alert>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Map image is being generated. If analysis fails, try going back to the map step and waiting a moment before continuing.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {error && (
         <Alert variant="destructive">

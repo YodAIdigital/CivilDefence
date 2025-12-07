@@ -3,6 +3,11 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { DisasterType } from '@/data/guide-templates'
 import { getPromptConfigByType, DEFAULT_PROMPTS } from '@/lib/ai-prompts'
 
+// Check if model requires v1alpha API (Gemini 3 models)
+function requiresV1Alpha(modelId: string): boolean {
+  return modelId.includes('gemini-3') || modelId.includes('gemini-2.5')
+}
+
 const DISASTER_TYPES: DisasterType[] = [
   'fire',
   'flood',
@@ -154,16 +159,74 @@ The user-provided location text may be incomplete or ambiguous. The MAP IMAGE is
 
     // Call Gemini API with multimodal content
     console.log('[analyze-risks] Calling Gemini API...')
-    let result
-    try {
-      result = await model.generateContent(parts)
-    } catch (apiError) {
-      console.error('[analyze-risks] Gemini API call failed:', apiError)
-      throw new Error(`Gemini API error: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`)
+    let text: string
+
+    // Use REST API for Gemini 3 models (requires v1alpha), SDK for others
+    if (requiresV1Alpha(modelId)) {
+      console.log('[analyze-risks] Using v1alpha REST API for model:', modelId)
+
+      // Build the contents array for REST API
+      const contentParts: Array<{ text: string } | { inlineData: { mimeType: string; data: string }; mediaResolution?: { level: string } }> = []
+
+      for (const part of parts) {
+        if ('text' in part) {
+          contentParts.push({ text: part.text })
+        } else if ('inlineData' in part) {
+          // Add mediaResolution for better image analysis
+          contentParts.push({
+            inlineData: part.inlineData,
+            mediaResolution: { level: 'media_resolution_high' }
+          })
+        }
+      }
+
+      const restResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1alpha/models/${modelId}:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{
+              parts: contentParts
+            }],
+          }),
+        }
+      )
+
+      const responseText = await restResponse.text()
+      console.log('[analyze-risks] REST API response status:', restResponse.status)
+
+      if (!restResponse.ok) {
+        console.error('[analyze-risks] REST API error:', responseText)
+        throw new Error(`Gemini API error: ${restResponse.status} - ${responseText}`)
+      }
+
+      const responseData = JSON.parse(responseText)
+
+      // Extract text from response
+      if (responseData.candidates?.[0]?.content?.parts) {
+        text = responseData.candidates[0].content.parts
+          .filter((p: { text?: string }) => p.text)
+          .map((p: { text: string }) => p.text)
+          .join('')
+      } else {
+        console.error('[analyze-risks] Unexpected response structure:', JSON.stringify(responseData).substring(0, 500))
+        throw new Error('Unexpected response structure from Gemini API')
+      }
+    } else {
+      // Use SDK for other models
+      let result
+      try {
+        result = await model.generateContent(parts)
+      } catch (apiError) {
+        console.error('[analyze-risks] Gemini API call failed:', apiError)
+        throw new Error(`Gemini API error: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`)
+      }
+
+      const response = await result.response
+      text = response.text()
     }
 
-    const response = await result.response
-    const text = response.text()
     console.log('[analyze-risks] Raw response length:', text.length)
     console.log('[analyze-risks] Raw response (first 500 chars):', text.substring(0, 500))
 
