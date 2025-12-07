@@ -293,19 +293,32 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
   const handleFinish = async () => {
     setIsSubmitting(true)
     try {
-      await onComplete(wizardData)
-      // Mark as completed FIRST to prevent any auto-save from re-saving
-      setIsCompleted(true)
-      // Clear draft state and save completed state (so if component remounts, we show promo)
-      clearSavedState()
+      // IMPORTANT: Clear draft storage and set completed state BEFORE calling onComplete
+      // This prevents race conditions where the component remounts mid-completion
+      localStorage.removeItem(WIZARD_STORAGE_KEY)
       localStorage.setItem(WIZARD_COMPLETED_KEY, JSON.stringify(wizardData))
-      setSavedState(null) // Also clear in-memory state to prevent resume prompt
-      setShowResumePrompt(false) // Ensure resume prompt doesn't show
+
+      // Mark as completed in state
+      setIsCompleted(true)
+      setSavedState(null)
+      setShowResumePrompt(false)
+
+      // Now call onComplete (which may cause remount)
+      await onComplete(wizardData)
+
       // Show the promotion step after successful creation
       setShowPromoStep(true)
       console.log('[Wizard] Community created successfully, showing promo step')
     } catch (error) {
       console.error('Error completing wizard:', error)
+      // On error, restore the draft so user can retry
+      localStorage.removeItem(WIZARD_COMPLETED_KEY)
+      localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify({
+        data: wizardData,
+        currentStep,
+        savedAt: new Date().toISOString(),
+      }))
+      setIsCompleted(false)
     } finally {
       setIsSubmitting(false)
     }
