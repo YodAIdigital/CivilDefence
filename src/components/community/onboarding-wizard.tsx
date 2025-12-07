@@ -364,7 +364,11 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
                 <Button onClick={() => {
                   // Clear the completed key so next time wizard opens fresh
                   localStorage.removeItem(WIZARD_COMPLETED_KEY)
-                  onDone ? onDone() : onCancel()
+                  if (onDone) {
+                    onDone()
+                  } else {
+                    onCancel()
+                  }
                 }} className="gap-2">
                   <span>Done</span>
                   <ArrowRight className="h-4 w-4" />
