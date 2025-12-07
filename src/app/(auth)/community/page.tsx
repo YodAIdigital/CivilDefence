@@ -229,7 +229,7 @@ export default function CommunityPage() {
     }
   }
 
-  const handleWizardComplete = async (wizardData: WizardData) => {
+  const handleWizardComplete = async (wizardData: WizardData): Promise<string | void> => {
     if (!user) return
 
     try {
@@ -458,9 +458,13 @@ export default function CommunityPage() {
 
       // Don't close the wizard or redirect - let the wizard show the promotion step
       // The wizard will call onCancel when the user clicks "Done" on the promo step
+
+      // Return the community ID so the wizard can use it for the signup link
+      return community.id
     } catch (err) {
       console.error('Error creating community:', err)
       setError('Failed to create community. Please try again.')
+      throw err // Re-throw so wizard knows creation failed
     }
   }
 

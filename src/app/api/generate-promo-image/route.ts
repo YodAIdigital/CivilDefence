@@ -9,6 +9,7 @@ interface GeneratePromoRequest {
   location: string
   description?: string
   style?: SocialStyleType
+  signupLink?: string
 }
 
 // Replace template variables in prompt
@@ -23,7 +24,7 @@ function interpolatePrompt(template: string, variables: Record<string, string>):
 export async function POST(request: NextRequest) {
   try {
     const body: GeneratePromoRequest = await request.json()
-    const { communityName, location, description, style = 'community' } = body
+    const { communityName, location, description, style = 'community', signupLink } = body
 
     if (!communityName || !location) {
       return NextResponse.json(
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         imageUrl: null,
-        suggestedPost: generateFallbackPost(communityName, location, description, style),
+        suggestedPost: generateFallbackPost(communityName, location, description, style, signupLink),
         message: 'API key not configured. Using template post.'
       })
     }
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
         communityName,
         location,
         description: description || '',
+        signupLink: signupLink || 'https://civildefence.pro/community',
       })
 
       console.log('Text generation - Final prompt (first 300 chars):', postPrompt.substring(0, 300))
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
       console.log('Text generation - SUCCESS, length:', suggestedPost.length)
     } catch (textError) {
       console.error('Text generation - FAILED:', textError)
-      suggestedPost = generateFallbackPost(communityName, location, description, style)
+      suggestedPost = generateFallbackPost(communityName, location, description, style, signupLink)
       console.log('Text generation - Using fallback template')
     }
 
@@ -178,7 +180,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function generateFallbackPost(communityName: string, location: string, description?: string, style?: string): string {
+function generateFallbackPost(communityName: string, location: string, description?: string, style?: string, signupLink?: string): string {
   const intros: Record<string, string[]> = {
     modern: ['Ready to be prepared?', 'Your safety network awaits.', 'Join the movement.'],
     professional: ['Building resilient communities.', 'Safety through organization.', 'Professional emergency response.'],
@@ -205,6 +207,8 @@ function generateFallbackPost(communityName: string, location: string, descripti
     [benefits[1], benefits[2]] = [benefits[2]!, benefits[1]!]
   }
 
+  const link = signupLink || 'https://civildefence.pro/community'
+
   return `🛡️ ${intro}
 
 Join ${communityName} - serving the ${location} area!${descText}
@@ -213,7 +217,7 @@ ${benefits.join('\n')}
 
 Be part of something that matters. Join us today!
 
-🔗 Sign up now at CivilDefencePro
+🔗 Sign up now: ${link}
 
 #EmergencyPreparedness #CommunityResilience #CivilDefence #DisasterReady #${location.replace(/[^a-zA-Z0-9]/g, '')}`
 }

@@ -75,7 +75,7 @@ interface SavedWizardState {
 
 interface OnboardingWizardProps {
   userId?: string
-  onComplete: (data: WizardData) => Promise<void>
+  onComplete: (data: WizardData) => Promise<string | void> // Returns community ID on success
   onCancel: () => void
   onDone?: () => void // Called when user finishes the promo step (after community creation)
 }
@@ -130,6 +130,7 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
   const [isInitialized, setIsInitialized] = useState(false)
   const [showPromoStep, setShowPromoStep] = useState(false) // Show promotion step after community is created
   const [isCompleted, setIsCompleted] = useState(false) // Track if community was successfully created
+  const [createdCommunityId, setCreatedCommunityId] = useState<string | null>(null) // Store the created community ID
 
   // Load saved state on mount
   useEffect(() => {
@@ -303,12 +304,15 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
       setSavedState(null)
       setShowResumePrompt(false)
 
-      // Now call onComplete (which may cause remount)
-      await onComplete(wizardData)
+      // Now call onComplete (which may cause remount) - returns community ID
+      const communityId = await onComplete(wizardData)
+      if (communityId) {
+        setCreatedCommunityId(communityId)
+      }
 
       // Show the promotion step after successful creation
       setShowPromoStep(true)
-      console.log('[Wizard] Community created successfully, showing promo step')
+      console.log('[Wizard] Community created successfully, showing promo step, communityId:', communityId)
     } catch (error) {
       console.error('Error completing wizard:', error)
       // On error, restore the draft so user can retry
@@ -368,7 +372,7 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
 
             {/* Promo Content */}
             <div className="p-6">
-              <StepSix data={wizardData} updateData={updateData} />
+              <StepSix data={wizardData} updateData={updateData} communityId={createdCommunityId || undefined} />
             </div>
 
             {/* Footer */}

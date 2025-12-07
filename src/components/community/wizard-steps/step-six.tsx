@@ -19,6 +19,7 @@ import type { WizardData } from '../onboarding-wizard'
 interface StepSixProps {
   data: WizardData
   updateData: (updates: Partial<WizardData>) => void
+  communityId?: string | undefined // The newly created community ID for signup link
 }
 
 const STYLE_OPTIONS = [
@@ -28,7 +29,7 @@ const STYLE_OPTIONS = [
   { value: 'modern', label: 'Modern', description: 'Minimalist' },
 ] as const
 
-export function StepSix({ data, updateData }: StepSixProps) {
+export function StepSix({ data, updateData, communityId }: StepSixProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   // Initialize from saved data if available
   const [selectedStyle, setSelectedStyle] = useState<string>(data.facebookPromo?.style || 'community')
@@ -45,6 +46,12 @@ export function StepSix({ data, updateData }: StepSixProps) {
     setImageError(false)
 
     try {
+      // Generate signup link for the community
+      const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://civildefence.pro'
+      const signupLink = communityId
+        ? `${baseUrl}/community/${communityId}`
+        : `${baseUrl}/community`
+
       const response = await fetch('/api/generate-promo-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -53,6 +60,7 @@ export function StepSix({ data, updateData }: StepSixProps) {
           location: data.location || data.meetingPointAddress || 'your area',
           description: data.description,
           style: selectedStyle,
+          signupLink,
         }),
       })
 

@@ -65,6 +65,7 @@ const FUNCTION_VARIABLES: Record<string, { name: string; description: string }[]
     { name: 'communityName', description: 'Name of the community' },
     { name: 'location', description: 'Location/address of the community' },
     { name: 'description', description: 'Community description (optional)' },
+    { name: 'signupLink', description: 'Direct signup link to the community page (e.g., https://civildefence.pro/community/abc123)' },
   ],
   social_image: [
     { name: 'communityName', description: 'Name of the community' },

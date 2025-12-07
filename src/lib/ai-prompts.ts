@@ -86,6 +86,7 @@ Customize the plan to:
 Community Name: {{communityName}}
 Location: {{location}}
 Description: {{description}}
+Signup Link: {{signupLink}}
 
 STYLE: Community-focused, warm and welcoming
 - Use friendly, inclusive language ("we", "together", "our community")
@@ -97,7 +98,7 @@ Requirements:
 - Start with a friendly emoji and warm greeting
 - Mention the community name and location naturally
 - List 3-4 benefits focusing on community connection (✅)
-- Include an inviting call to action
+- Include an inviting call to action with the signup link
 - Add 4-5 relevant hashtags at the end
 - Keep it under 300 words
 
@@ -113,6 +114,7 @@ Write ONLY the post text, no explanations or alternatives.`,
 Community Name: {{communityName}}
 Location: {{location}}
 Description: {{description}}
+Signup Link: {{signupLink}}
 
 STYLE: Professional and authoritative
 - Use formal, credible language
@@ -124,7 +126,7 @@ Requirements:
 - Start with a professional hook about preparedness
 - Mention the community name and location with authority
 - List 3-4 benefits focusing on safety and preparedness (✅)
-- Include a clear, professional call to action
+- Include a clear, professional call to action with the signup link
 - Add 4-5 relevant hashtags at the end
 - Keep it under 300 words
 
@@ -140,6 +142,7 @@ Write ONLY the post text, no explanations or alternatives.`,
 Community Name: {{communityName}}
 Location: {{location}}
 Description: {{description}}
+Signup Link: {{signupLink}}
 
 STYLE: Emergency-focused, urgent but not alarmist
 - Use action-oriented language
@@ -151,7 +154,7 @@ Requirements:
 - Start with attention-grabbing safety message
 - Mention the community name and location with urgency
 - List 3-4 benefits focusing on emergency readiness (✅)
-- Include a strong call to action about preparedness
+- Include a strong call to action with the signup link
 - Add 4-5 relevant hashtags at the end
 - Keep it under 300 words
 
@@ -167,6 +170,7 @@ Write ONLY the post text, no explanations or alternatives.`,
 Community Name: {{communityName}}
 Location: {{location}}
 Description: {{description}}
+Signup Link: {{signupLink}}
 
 STYLE: Modern and minimalist
 - Use concise, punchy language
@@ -178,7 +182,7 @@ Requirements:
 - Start with a bold, concise statement
 - Mention the community name and location efficiently
 - List 3-4 benefits in short, punchy points (✅)
-- Include a simple, direct call to action
+- Include a simple, direct call to action with the signup link
 - Add 4-5 relevant hashtags at the end
 - Keep it under 250 words - brevity is key
 
