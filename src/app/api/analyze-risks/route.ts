@@ -120,9 +120,19 @@ Return ONLY the JSON object, no markdown formatting, no code blocks, no explanat
         const base64Data = base64Match[2] || ''
         console.log('[analyze-risks] Adding map image to request, mimeType:', mimeType, 'base64 length:', base64Data.length)
 
-        // Add image context instruction
+        // Add image context instruction - CRITICAL: emphasize visual analysis
         parts.push({
-          text: 'The following image shows the community region boundaries on a map. Use this visual context to better understand the geographical area, terrain features, nearby water bodies, urban density, and potential hazard zones when analyzing risks.\n\n'
+          text: `CRITICAL INSTRUCTION: The following image is a map showing the EXACT community region boundaries. You MUST analyze this image to determine the actual geographic location.
+
+BEFORE reading any text prompts, examine this map image and identify:
+1. What COUNTRY is shown? (look at place names, coastline shapes, terrain)
+2. What SPECIFIC REGION within that country? (look for city names, road labels, geographic features)
+3. What terrain features are visible? (mountains, rivers, coast, urban areas)
+4. What is the shape and size of the highlighted community boundary?
+
+The user-provided location text may be incomplete or ambiguous. The MAP IMAGE is the authoritative source for determining the actual location. Base your entire analysis on what you SEE in the map.
+
+`
         })
 
         // Add the image

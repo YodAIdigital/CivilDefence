@@ -16,38 +16,49 @@ export const DEFAULT_PROMPTS: Record<AIFunctionType, { name: string; description
     model_id: 'gemini-2.0-flash',
     prompt_template: `You are an emergency preparedness expert analyzing regional disaster risks.
 
-Location: {{location}}
+IMPORTANT: If a map image is provided, you MUST analyze the VISUAL content of the map image to determine the actual location. The image shows the exact community boundaries - describe what you see in the map (country, region, terrain features, nearby cities/landmarks visible) to identify the location accurately.
+
+User-provided location hint: {{location}}
 {{coordinates}}
 
-Analyze this specific region and provide a comprehensive risk assessment for emergency preparedness planning. Consider:
+STEP 1 - VISUAL ANALYSIS (if map provided):
+First, examine the map image carefully. Identify:
+- What country and region is shown in the map?
+- What are the visible terrain features (mountains, rivers, coastline, urban areas)?
+- What nearby place names or landmarks can you see?
+- What is the approximate size and shape of the highlighted community area?
 
-1. Geographic factors (elevation, proximity to water, geology, climate)
+STEP 2 - RISK ASSESSMENT:
+Based on your visual analysis of the map (NOT just the location hint text), analyze this specific region for disaster risks. Consider:
+
+1. Geographic factors visible in the map (elevation, proximity to water, geology, climate)
 2. Historical disaster patterns in this specific area
 3. Seasonal risks and weather patterns
-4. Infrastructure and urban planning considerations
-5. Regional vulnerabilities
+4. Infrastructure and urban planning visible in the map
+5. Regional vulnerabilities specific to what you observe
 
 For each relevant disaster type from this list: {{disaster_types}}
 
 Provide your response in this exact JSON format:
 {
-  "regionalInfo": "A 2-3 sentence overview of the region's geographic and climate context",
+  "regionalInfo": "A 2-3 sentence overview describing the ACTUAL region shown in the map, including country, region name, and key geographic features visible",
   "risks": [
     {
       "type": "earthquake",
       "severity": "high",
-      "description": "Brief explanation of why this risk exists in this region",
+      "description": "Brief explanation of why this risk exists in this region based on what you observe",
       "recommendedActions": ["Specific action 1", "Specific action 2", "Specific action 3"]
     }
   ]
 }
 
 Rules:
-- Only include risks that are genuinely relevant to this specific location
+- CRITICAL: Base your analysis on the MAP IMAGE if provided, not assumptions from the location text
+- Only include risks that are genuinely relevant to the region VISIBLE IN THE MAP
 - Severity must be: "low", "medium", or "high"
 - Type must match exactly from the list provided
 - Include 3-5 specific, actionable recommendations per risk
-- Focus on realistic, location-specific threats
+- Focus on realistic, location-specific threats based on visual observation
 - Order risks by severity (high to low)
 - Return ONLY the JSON, no additional text
 
