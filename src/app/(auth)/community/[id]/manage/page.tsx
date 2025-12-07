@@ -14,6 +14,7 @@ import { RegionEditor } from '@/components/maps/region-editor'
 import { MemberSearchFilter } from '@/components/community/member-search-filter'
 import { MemberProfileCard } from '@/components/community/member-profile-card'
 import { CustomRecipientSelector } from '@/components/community/custom-recipient-selector'
+import { AIChat } from '@/components/community/ai-chat'
 import { UserPlus, X, Mail, Clock, Bell, AlertTriangle, AlertCircle, Info, CheckCircle, MessageSquare, ChevronDown, Webhook, Copy, Trash2, Edit2, ToggleLeft, ToggleRight, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -2824,6 +2825,14 @@ export default function CommunityManagePage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* AI Chat - Only show for admins and team members */}
+      {isAdmin && community && (
+        <AIChat
+          communityId={communityId}
+          communityName={community.name}
+        />
       )}
 
     </div>

@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { ContactsDisplay } from '@/components/community/contacts-display'
 import type { Community, CommunityContact } from '@/types/database'
 import { ArrowLeft, MapPin, Users, Settings } from 'lucide-react'
+import { AIChat } from '@/components/community/ai-chat'
 
 export default function CommunityContactsPage() {
   const params = useParams()
@@ -220,6 +221,14 @@ export default function CommunityContactsPage() {
           Back to Communities
         </Link>
       </div>
+
+      {/* AI Chat - Only show for admins and team members */}
+      {isAdmin && community && (
+        <AIChat
+          communityId={communityId}
+          communityName={community.name}
+        />
+      )}
     </div>
   )
 }

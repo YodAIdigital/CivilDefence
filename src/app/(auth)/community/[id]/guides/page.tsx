@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { guideTemplates, GuideTemplate } from '@/data/guide-templates'
 import { GuideEditor } from '@/components/guides/guide-editor'
+import { AIChat } from '@/components/community/ai-chat'
 import type { Community, CommunityGuide, GuideSection, GuideEmergencyContact } from '@/types/database'
 
 type ViewMode = 'list' | 'view' | 'edit' | 'create'
@@ -733,6 +734,14 @@ export default function CommunityGuidesPage() {
             </div>
           ))}
         </div>
+      )}
+
+      {/* AI Chat - Only show for admins and team members */}
+      {isAdmin && community && (
+        <AIChat
+          communityId={communityId}
+          communityName={community.name}
+        />
       )}
     </div>
   )

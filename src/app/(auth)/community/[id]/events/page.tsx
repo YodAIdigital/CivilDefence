@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth-context'
 import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete'
 import type { Community, CommunityEvent, CommunityMember, EventType, EventVisibility, Profile } from '@/types/database'
 import { EVENT_TYPE_CONFIG as eventTypeConfig, EVENT_VISIBILITY_CONFIG as visibilityConfig } from '@/types/database'
+import { AIChat } from '@/components/community/ai-chat'
 
 type TabType = 'alerts' | 'members' | 'events' | 'visibility'
 
@@ -1114,6 +1115,14 @@ export default function CommunityEventsPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* AI Chat - Only show for admins and team members */}
+      {isAdmin && community && (
+        <AIChat
+          communityId={communityId}
+          communityName={community.name}
+        />
       )}
     </div>
   )

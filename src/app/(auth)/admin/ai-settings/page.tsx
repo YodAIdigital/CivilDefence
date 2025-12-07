@@ -31,6 +31,7 @@ import {
   Edit3,
   Image,
   Phone,
+  MessageSquare,
 } from 'lucide-react'
 import { AI_FUNCTION_CONFIG, SOCIAL_STYLE_OPTIONS } from '@/types/database'
 import type { AIPromptConfig, GeminiModelInfo, AIFunctionType, SocialStyleType } from '@/types/database'
@@ -76,6 +77,11 @@ const FUNCTION_VARIABLES: Record<string, { name: string; description: string }[]
     { name: 'region', description: 'Region/State name' },
     { name: 'city', description: 'City or local area name' },
   ],
+  community_chat: [
+    { name: 'communityName', description: 'Name of the community' },
+    { name: 'communityData', description: 'JSON summary of community data (members, households, guides, etc.)' },
+    { name: 'userQuestion', description: 'The user question being asked' },
+  ],
 }
 
 const MENU_FUNCTIONS: MenuFunction[] = [
@@ -117,6 +123,14 @@ const MENU_FUNCTIONS: MenuFunction[] = [
     description: 'Localizes emergency contacts for regions',
     icon: <Phone className="h-5 w-5" />,
     baseType: 'emergency_contact_localization',
+    hasStyling: false,
+  },
+  {
+    id: 'community_chat',
+    label: 'Community Chat',
+    description: 'AI assistant for querying community data',
+    icon: <MessageSquare className="h-5 w-5" />,
+    baseType: 'community_chat',
     hasStyling: false,
   },
 ]

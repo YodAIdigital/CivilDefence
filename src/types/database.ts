@@ -2211,6 +2211,7 @@ export type AIFunctionType =
   | 'social_image_emergency'
   | 'social_image_modern'
   | 'emergency_contact_localization'
+  | 'community_chat'
 
 // Helper to get function type from base type and style
 export function getSocialFunctionType(baseType: 'social_post' | 'social_image', style: SocialStyleType): AIFunctionType {
@@ -2342,6 +2343,13 @@ export const AI_FUNCTION_CONFIG = {
     supportsImage: false,
     category: 'general',
   },
+  community_chat: {
+    label: 'Community Data Chat',
+    description: 'AI assistant for querying community data (members, households, response plans)',
+    icon: 'chat',
+    supportsImage: false,
+    category: 'general',
+  },
 } as const
 
 // Gemini model info returned from API
@@ -2379,4 +2387,43 @@ export interface UpdateCommunityRegion {
   region_polygon: RegionPolygon | null
   region_color?: string
   region_opacity?: number
+}
+
+// ==========================================
+// Community AI Chat Types
+// ==========================================
+
+// AI chat message for community data queries
+export interface CommunityAIChatMessage {
+  id: string
+  community_id: string
+  user_id: string
+  user_message: string
+  ai_response: string
+  model_used: string | null
+  tokens_used: number | null
+  created_at: string
+}
+
+// For creating a new chat message
+export interface CreateCommunityAIChatMessage {
+  community_id: string
+  user_id: string
+  user_message: string
+  ai_response: string
+  model_used?: string
+  tokens_used?: number
+}
+
+// Chat request payload
+export interface CommunityAIChatRequest {
+  community_id: string
+  message: string
+}
+
+// Chat response payload
+export interface CommunityAIChatResponse {
+  response: string
+  model_used: string
+  tokens_used?: number
 }

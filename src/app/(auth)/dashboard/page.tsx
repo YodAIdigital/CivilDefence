@@ -10,7 +10,9 @@ import { PDFExportWidget } from '@/components/dashboard/pdf-export-widget'
 import { CommunityLocationsWidget } from '@/components/maps/community-locations-widget'
 import { useAuth } from '@/contexts/auth-context'
 import { useNotifications } from '@/contexts/notification-context'
+import { useCommunity } from '@/contexts/community-context'
 import { supabase } from '@/lib/supabase/client'
+import { AIChat } from '@/components/community/ai-chat'
 import type { AlertLevel } from '@/types/database'
 
 interface Alert {
@@ -104,6 +106,7 @@ function saveNotifiedAlert(alertId: string) {
 export default function DashboardPage() {
   const { user } = useAuth()
   const { sendAlertNotification, permission } = useNotifications()
+  const { activeCommunity, canManageActiveCommunity } = useCommunity()
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const hasInitialFetch = useRef(false)
@@ -386,6 +389,14 @@ export default function DashboardPage() {
           <PreparednessWidget />
         </div>
       </aside>
+
+      {/* AI Chat - Only show if user has an active community and can manage it */}
+      {activeCommunity && canManageActiveCommunity && (
+        <AIChat
+          communityId={activeCommunity.id}
+          communityName={activeCommunity.name}
+        />
+      )}
     </div>
   )
 }
