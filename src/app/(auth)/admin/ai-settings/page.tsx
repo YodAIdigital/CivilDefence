@@ -32,6 +32,7 @@ import {
   Image,
   Phone,
   MessageSquare,
+  ClipboardList,
 } from 'lucide-react'
 import { AI_FUNCTION_CONFIG, SOCIAL_STYLE_OPTIONS } from '@/types/database'
 import type { AIPromptConfig, GeminiModelInfo, AIFunctionType, SocialStyleType } from '@/types/database'
@@ -82,6 +83,14 @@ const FUNCTION_VARIABLES: Record<string, { name: string; description: string }[]
     { name: 'communityData', description: 'JSON summary of community data (members, households, guides, etc.)' },
     { name: 'userQuestion', description: 'The user question being asked' },
   ],
+  sop_generation: [
+    { name: 'emergencyType', description: 'Type of emergency (e.g., earthquake, flood)' },
+    { name: 'guideName', description: 'Name of the response plan' },
+    { name: 'guideType', description: 'Type of guide/response plan' },
+    { name: 'location', description: 'Community location' },
+    { name: 'guideContent', description: 'Formatted content from the response plan sections' },
+    { name: 'customNotes', description: 'Community-specific notes from the response plan' },
+  ],
 }
 
 const MENU_FUNCTIONS: MenuFunction[] = [
@@ -131,6 +140,14 @@ const MENU_FUNCTIONS: MenuFunction[] = [
     description: 'AI assistant for querying community data',
     icon: <MessageSquare className="h-5 w-5" />,
     baseType: 'community_chat',
+    hasStyling: false,
+  },
+  {
+    id: 'sop_generation',
+    label: 'SOP Generation',
+    description: 'Generates SOP tasks for emergency response teams',
+    icon: <ClipboardList className="h-5 w-5" />,
+    baseType: 'sop_generation',
     hasStyling: false,
   },
 ]

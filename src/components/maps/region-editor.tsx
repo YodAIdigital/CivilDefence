@@ -461,11 +461,11 @@ export function RegionEditor({
   if (compactMode) {
     return (
       <div className="space-y-3">
-        {/* Map - taller in compact mode */}
+        {/* Map - sized to fit wizard popup without scrolling */}
         <div
           ref={mapRef}
           className={`rounded-lg overflow-hidden ${isDrawing ? 'cursor-crosshair' : ''}`}
-          style={{ height: '480px', width: '100%' }}
+          style={{ height: '340px', width: '100%' }}
         />
 
         {/* Controls below map */}

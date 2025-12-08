@@ -2212,6 +2212,7 @@ export type AIFunctionType =
   | 'social_image_modern'
   | 'emergency_contact_localization'
   | 'community_chat'
+  | 'sop_generation'
 
 // Helper to get function type from base type and style
 export function getSocialFunctionType(baseType: 'social_post' | 'social_image', style: SocialStyleType): AIFunctionType {
@@ -2350,6 +2351,13 @@ export const AI_FUNCTION_CONFIG = {
     supportsImage: false,
     category: 'general',
   },
+  sop_generation: {
+    label: 'SOP Task Generation',
+    description: 'Generates Standard Operating Procedure tasks for emergency response teams',
+    icon: 'checklist',
+    supportsImage: false,
+    category: 'general',
+  },
 } as const
 
 // Gemini model info returned from API
@@ -2427,3 +2435,617 @@ export interface CommunityAIChatResponse {
   model_used: string
   tokens_used?: number
 }
+
+// ==========================================
+// SOP (Standard Operating Procedures) Types
+// ==========================================
+
+// Task status options
+export type SOPTaskStatus = 'pending' | 'in_progress' | 'completed' | 'skipped'
+
+// Activated SOP status options
+export type ActivatedSOPStatus = 'active' | 'completed' | 'archived'
+
+// Task category options
+export type SOPTaskCategory = 'immediate' | 'communication' | 'logistics' | 'safety' | 'recovery' | 'other'
+
+// Default assignee role options for SOP template tasks
+export type SOPDefaultAssigneeRole = 'team_lead' | 'any_team_member' | 'admin' | 'none'
+
+export const SOP_DEFAULT_ASSIGNEE_OPTIONS: { value: SOPDefaultAssigneeRole; label: string }[] = [
+  { value: 'none', label: 'No default' },
+  { value: 'team_lead', label: 'Team Lead' },
+  { value: 'any_team_member', label: 'Any Team Member' },
+  { value: 'admin', label: 'Admin' },
+]
+
+// SOP Template Task (stored in JSONB)
+export interface SOPTemplateTask {
+  id: string
+  title: string
+  description?: string
+  order: number
+  estimated_duration_minutes?: number
+  category?: SOPTaskCategory
+  default_assignee_role?: SOPDefaultAssigneeRole // Optional role-based pre-assignment
+  default_assignee_id?: string // Optional specific user ID for pre-assignment
+}
+
+// SOP Template (attached to response plans)
+export interface SOPTemplate {
+  id: string
+  community_id: string
+  guide_id: string
+
+  // Template details
+  name: string
+  description: string | null
+  tasks: SOPTemplateTask[]
+
+  // Status
+  is_active: boolean
+
+  // Audit
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new SOP template
+export interface CreateSOPTemplate {
+  community_id: string
+  guide_id: string
+  name: string
+  description?: string
+  tasks?: SOPTemplateTask[]
+  is_active?: boolean
+  created_by: string
+}
+
+// For updating an SOP template
+export interface UpdateSOPTemplate {
+  name?: string
+  description?: string
+  tasks?: SOPTemplateTask[]
+  is_active?: boolean
+  updated_by: string
+}
+
+// Activated SOP (instance during emergency)
+export interface ActivatedSOP {
+  id: string
+  community_id: string
+  template_id: string
+  guide_id: string
+
+  // Event details
+  event_name: string
+  event_date: string
+  emergency_type: string
+
+  // Status
+  status: ActivatedSOPStatus
+
+  // Timing
+  activated_at: string
+  completed_at: string | null
+  archived_at: string | null
+
+  // Notes
+  completion_notes: string | null
+
+  // Audit
+  activated_by: string
+  completed_by: string | null
+  archived_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For activating a new SOP
+export interface CreateActivatedSOP {
+  community_id: string
+  template_id: string
+  guide_id: string
+  event_name: string
+  event_date?: string
+  emergency_type: string
+  activated_by: string
+}
+
+// For updating an activated SOP
+export interface UpdateActivatedSOP {
+  event_name?: string
+  status?: ActivatedSOPStatus
+  completed_at?: string
+  archived_at?: string
+  completion_notes?: string
+  completed_by?: string
+  archived_by?: string
+}
+
+// SOP Task (individual task in an activated SOP)
+export interface SOPTask {
+  id: string
+  activated_sop_id: string
+  community_id: string
+
+  // Task details
+  title: string
+  description: string | null
+  task_order: number
+  estimated_duration_minutes: number | null
+  category: SOPTaskCategory | null
+
+  // Assignment
+  team_lead_id: string | null
+  assigned_to_id: string | null
+
+  // Progress
+  status: SOPTaskStatus
+  completed_at: string | null
+  completed_by: string | null
+
+  // Notes
+  notes: string | null
+
+  // Audit
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new SOP task
+export interface CreateSOPTask {
+  activated_sop_id: string
+  community_id: string
+  title: string
+  description?: string
+  task_order: number
+  estimated_duration_minutes?: number
+  category?: SOPTaskCategory
+  team_lead_id?: string
+  assigned_to_id?: string
+}
+
+// For updating an SOP task
+export interface UpdateSOPTask {
+  title?: string
+  description?: string
+  task_order?: number
+  team_lead_id?: string | null
+  assigned_to_id?: string | null
+  status?: SOPTaskStatus
+  completed_at?: string
+  completed_by?: string
+  notes?: string
+}
+
+// SOP Task Activity (audit log)
+export interface SOPTaskActivity {
+  id: string
+  task_id: string
+  activated_sop_id: string
+
+  // Activity details
+  action: 'status_change' | 'assignment_change' | 'note_added' | 'team_lead_change'
+  old_value: string | null
+  new_value: string | null
+
+  // Who made the change
+  performed_by: string
+
+  // Audit
+  created_at: string
+}
+
+// SOP Task with profile details (for display)
+export interface SOPTaskWithProfiles extends SOPTask {
+  team_lead?: {
+    id: string
+    full_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
+  assigned_to?: {
+    id: string
+    full_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
+  completed_by_profile?: {
+    id: string
+    full_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
+}
+
+// Activated SOP with related data (for display)
+export interface ActivatedSOPWithDetails extends ActivatedSOP {
+  template?: SOPTemplate
+  guide?: {
+    id: string
+    name: string
+    icon: string
+    color: string
+    guide_type: string
+  }
+  tasks?: SOPTaskWithProfiles[]
+  activated_by_profile?: {
+    id: string
+    full_name: string | null
+    email: string
+    avatar_url: string | null
+  }
+}
+
+// SOP Task category configuration for display
+export const SOP_TASK_CATEGORY_CONFIG = {
+  immediate: {
+    label: 'Immediate Action',
+    description: 'Actions that must be taken immediately',
+    icon: 'priority_high',
+    color: '#ef4444',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+  },
+  communication: {
+    label: 'Communication',
+    description: 'Alert and communication tasks',
+    icon: 'campaign',
+    color: '#3b82f6',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+  },
+  logistics: {
+    label: 'Logistics',
+    description: 'Equipment, supplies, and resource management',
+    icon: 'inventory_2',
+    color: '#8b5cf6',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+  },
+  safety: {
+    label: 'Safety',
+    description: 'Safety checks and protocols',
+    icon: 'health_and_safety',
+    color: '#22c55e',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+  },
+  recovery: {
+    label: 'Recovery',
+    description: 'Post-emergency recovery tasks',
+    icon: 'healing',
+    color: '#f59e0b',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+  },
+  other: {
+    label: 'Other',
+    description: 'Other tasks',
+    icon: 'more_horiz',
+    color: '#6b7280',
+    bgColor: 'bg-gray-50 dark:bg-gray-900/20',
+  },
+} as const
+
+// SOP Task status configuration for display
+export const SOP_TASK_STATUS_CONFIG = {
+  pending: {
+    label: 'Pending',
+    icon: 'hourglass_empty',
+    color: '#6b7280',
+    bgColor: 'bg-gray-100 dark:bg-gray-800',
+  },
+  in_progress: {
+    label: 'In Progress',
+    icon: 'sync',
+    color: '#3b82f6',
+    bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+  },
+  completed: {
+    label: 'Completed',
+    icon: 'check_circle',
+    color: '#22c55e',
+    bgColor: 'bg-green-100 dark:bg-green-900/30',
+  },
+  skipped: {
+    label: 'Skipped',
+    icon: 'skip_next',
+    color: '#f59e0b',
+    bgColor: 'bg-amber-100 dark:bg-amber-900/30',
+  },
+} as const
+
+// Activated SOP status configuration for display
+export const ACTIVATED_SOP_STATUS_CONFIG = {
+  active: {
+    label: 'Active',
+    description: 'Emergency response in progress',
+    icon: 'emergency',
+    color: '#ef4444',
+    bgColor: 'bg-red-100 dark:bg-red-900/30',
+  },
+  completed: {
+    label: 'Completed',
+    description: 'Emergency resolved',
+    icon: 'check_circle',
+    color: '#22c55e',
+    bgColor: 'bg-green-100 dark:bg-green-900/30',
+  },
+  archived: {
+    label: 'Archived',
+    description: 'Stored for historical review',
+    icon: 'archive',
+    color: '#6b7280',
+    bgColor: 'bg-gray-100 dark:bg-gray-800',
+  },
+} as const
+
+// ==========================================
+// Emergency Contacts System Types
+// ==========================================
+
+// Contact categories
+export type EmergencyContactCategory = 'emergency' | 'health' | 'utilities' | 'local' | 'government' | 'community' | 'personal' | 'medical' | 'insurance'
+
+// Default emergency contact (system-wide)
+export interface DefaultEmergencyContact {
+  id: string
+  name: string
+  phone: string
+  description: string | null
+  icon: string
+  category: EmergencyContactCategory
+  display_order: number
+  is_active: boolean
+  allow_community_override: boolean
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new default contact
+export interface CreateDefaultEmergencyContact {
+  name: string
+  phone: string
+  description?: string
+  icon?: string
+  category: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+  allow_community_override?: boolean
+  created_by: string
+}
+
+// For updating a default contact
+export interface UpdateDefaultEmergencyContact {
+  name?: string
+  phone?: string
+  description?: string
+  icon?: string
+  category?: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+  allow_community_override?: boolean
+  updated_by: string
+}
+
+// Community emergency contact (regional)
+export interface CommunityEmergencyContact {
+  id: string
+  community_id: string
+  name: string
+  phone: string
+  description: string | null
+  icon: string
+  category: EmergencyContactCategory
+  display_order: number
+  is_active: boolean
+  overrides_default_id: string | null
+  created_by: string | null
+  updated_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new community contact
+export interface CreateCommunityEmergencyContact {
+  community_id: string
+  name: string
+  phone: string
+  description?: string
+  icon?: string
+  category?: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+  overrides_default_id?: string
+  created_by: string
+}
+
+// For updating a community contact
+export interface UpdateCommunityEmergencyContact {
+  name?: string
+  phone?: string
+  description?: string
+  icon?: string
+  category?: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+  overrides_default_id?: string | null
+  updated_by: string
+}
+
+// User emergency contact (personal)
+export interface UserEmergencyContact {
+  id: string
+  user_id: string
+  name: string
+  phone: string
+  description: string | null
+  icon: string
+  category: EmergencyContactCategory
+  display_order: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// For creating a new user contact
+export interface CreateUserEmergencyContact {
+  user_id: string
+  name: string
+  phone: string
+  description?: string
+  icon?: string
+  category?: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+}
+
+// For updating a user contact
+export interface UpdateUserEmergencyContact {
+  name?: string
+  phone?: string
+  description?: string
+  icon?: string
+  category?: EmergencyContactCategory
+  display_order?: number
+  is_active?: boolean
+}
+
+// Community hidden contact (to hide defaults)
+export interface CommunityHiddenContact {
+  id: string
+  community_id: string
+  default_contact_id: string
+  reason: string | null
+  hidden_by: string | null
+  hidden_at: string
+}
+
+// For hiding a default contact
+export interface CreateCommunityHiddenContact {
+  community_id: string
+  default_contact_id: string
+  reason?: string
+  hidden_by: string
+}
+
+// Combined contact for display (merges all levels)
+export interface DisplayEmergencyContact {
+  id: string
+  name: string
+  phone: string
+  description: string | null
+  icon: string
+  category: EmergencyContactCategory
+  display_order: number
+  source: 'default' | 'community' | 'user'
+  isEditable: boolean
+  isHideable: boolean
+  overridesDefaultId?: string
+}
+
+// Category configuration for display
+export const EMERGENCY_CONTACT_CATEGORY_CONFIG = {
+  emergency: {
+    label: 'Emergency Services',
+    icon: 'emergency',
+    color: '#ef4444',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    order: 1,
+  },
+  health: {
+    label: 'Health Services',
+    icon: 'medical_services',
+    color: '#ec4899',
+    bgColor: 'bg-pink-50 dark:bg-pink-900/20',
+    order: 2,
+  },
+  utilities: {
+    label: 'Utilities',
+    icon: 'build',
+    color: '#f59e0b',
+    bgColor: 'bg-amber-50 dark:bg-amber-900/20',
+    order: 3,
+  },
+  local: {
+    label: 'Information Lines',
+    icon: 'info',
+    color: '#3b82f6',
+    bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+    order: 4,
+  },
+  government: {
+    label: 'Government Services',
+    icon: 'account_balance',
+    color: '#6366f1',
+    bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+    order: 5,
+  },
+  community: {
+    label: 'Community Contacts',
+    icon: 'groups',
+    color: '#22c55e',
+    bgColor: 'bg-green-50 dark:bg-green-900/20',
+    order: 6,
+  },
+  personal: {
+    label: 'Personal Contacts',
+    icon: 'person',
+    color: '#8b5cf6',
+    bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+    order: 7,
+  },
+  medical: {
+    label: 'Medical Contacts',
+    icon: 'local_hospital',
+    color: '#ef4444',
+    bgColor: 'bg-red-50 dark:bg-red-900/20',
+    order: 8,
+  },
+  insurance: {
+    label: 'Insurance',
+    icon: 'shield',
+    color: '#14b8a6',
+    bgColor: 'bg-teal-50 dark:bg-teal-900/20',
+    order: 9,
+  },
+} as const
+
+// Icon options for contacts
+export const EMERGENCY_CONTACT_ICON_OPTIONS = [
+  { value: 'call', label: 'Phone' },
+  { value: 'emergency', label: 'Emergency' },
+  { value: 'local_police', label: 'Police' },
+  { value: 'local_fire_department', label: 'Fire' },
+  { value: 'local_hospital', label: 'Hospital' },
+  { value: 'medical_services', label: 'Medical' },
+  { value: 'health_and_safety', label: 'Health' },
+  { value: 'psychology', label: 'Mental Health' },
+  { value: 'support', label: 'Support' },
+  { value: 'science', label: 'Poison' },
+  { value: 'shield', label: 'Civil Defence' },
+  { value: 'bolt', label: 'Power' },
+  { value: 'water_drop', label: 'Water' },
+  { value: 'cloud', label: 'Weather' },
+  { value: 'directions_car', label: 'Transport' },
+  { value: 'account_balance', label: 'Government' },
+  { value: 'groups', label: 'Community' },
+  { value: 'person', label: 'Person' },
+  { value: 'home', label: 'Home' },
+  { value: 'business', label: 'Business' },
+] as const
+
+// Suggested community contacts based on region
+export const SUGGESTED_COMMUNITY_CONTACTS = [
+  { name: 'Local Council', description: 'Your local district/city council', icon: 'account_balance', category: 'government' as const },
+  { name: 'Regional Council', description: 'Regional council services', icon: 'account_balance', category: 'government' as const },
+  { name: 'Power Company', description: 'Local electricity provider outages', icon: 'bolt', category: 'utilities' as const },
+  { name: 'Water Supply', description: 'Local water supply issues', icon: 'water_drop', category: 'utilities' as const },
+  { name: 'Local Police Station', description: 'Non-emergency local police', icon: 'local_police', category: 'emergency' as const },
+  { name: 'Local Fire Station', description: 'Non-emergency local fire', icon: 'local_fire_department', category: 'emergency' as const },
+  { name: 'Community Leader', description: 'Emergency response coordinator', icon: 'groups', category: 'community' as const },
+  { name: 'Medical Centre', description: 'Local GP or medical centre', icon: 'local_hospital', category: 'health' as const },
+  { name: 'Pharmacy', description: 'Local pharmacy', icon: 'medical_services', category: 'health' as const },
+  { name: 'Vet Clinic', description: 'Local veterinary clinic', icon: 'pets', category: 'local' as const },
+] as const

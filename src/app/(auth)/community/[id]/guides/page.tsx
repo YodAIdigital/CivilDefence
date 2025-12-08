@@ -157,7 +157,7 @@ export default function CommunityGuidesPage() {
   }
 
   // Save guide
-  const handleSaveGuide = async (guideData: Partial<CommunityGuide>) => {
+  const handleSaveGuide = async (guideData: Partial<CommunityGuide>): Promise<CommunityGuide | void> => {
     if (!user) throw new Error('Not authenticated')
 
     const isNew = !guideData.id
@@ -180,6 +180,8 @@ export default function CommunityGuidesPage() {
       ...(isNew ? { created_by: user.id } : { updated_by: user.id }),
     }
 
+    let savedGuide: CommunityGuide | null = null
+
     if (isNew) {
       const { data, error } = await (supabase
         .from('community_guides' as 'profiles')
@@ -189,6 +191,7 @@ export default function CommunityGuidesPage() {
 
       if (error) throw error
       if (data) {
+        savedGuide = data
         setGuides((prev) => [...prev, data])
         setSuccess('Guide created successfully!')
       }
@@ -202,6 +205,7 @@ export default function CommunityGuidesPage() {
 
       if (error) throw error
       if (data) {
+        savedGuide = data
         setGuides((prev) =>
           prev.map((g) => (g.id === guideData.id ? data : g))
         )
@@ -212,6 +216,8 @@ export default function CommunityGuidesPage() {
     setViewMode('list')
     setSelectedGuide(null)
     setTimeout(() => setSuccess(null), 3000)
+
+    return savedGuide || undefined
   }
 
   // Delete guide
@@ -297,6 +303,7 @@ export default function CommunityGuidesPage() {
               setSelectedGuide(null)
             }}
             isNew={!selectedGuide.id}
+            communityId={communityId}
           />
         </div>
       )

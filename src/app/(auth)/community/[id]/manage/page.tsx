@@ -205,7 +205,6 @@ export default function CommunityManagePage() {
     'rules-list': true,
     'create-rule': true,
     'members': true,
-    'contacts': true,
     'groups': true,
     'about-roles': true,
     'community-name': true,
@@ -2272,6 +2271,7 @@ export default function CommunityManagePage() {
           </div>
         </>
       )}
+
 
       {activeTab === 'visibility' && (
         <div className="space-y-6">

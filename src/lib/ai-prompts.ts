@@ -357,6 +357,68 @@ AVAILABLE DATA INCLUDES:
 
 Respond in a helpful, conversational tone. Use British English spelling.`,
   },
+  sop_generation: {
+    name: 'SOP Task Generation',
+    description: 'Generates Standard Operating Procedure tasks for emergency response teams',
+    model_id: 'gemini-2.0-flash',
+    prompt_template: `You are an emergency management expert creating Standard Operating Procedures (SOPs) for civil defence response teams.
+
+Generate a detailed SOP task list for a {{emergencyType}} emergency based on the following response plan:
+
+Response Plan Name: {{guideName}}
+Guide Type: {{guideType}}
+Community Location: {{location}}
+
+Response Plan Content:
+{{guideContent}}
+
+Community-Specific Notes:
+{{customNotes}}
+
+TASK GENERATION REQUIREMENTS:
+
+1. Create tasks that civil defence team members must complete DURING an emergency event
+2. Tasks should be actionable, specific, and time-sensitive
+3. Order tasks in logical sequence of priority and dependency
+4. Group tasks by category:
+   - immediate: Critical first actions (first 15-30 minutes)
+   - communication: Alert, notification, and coordination tasks
+   - safety: Safety checks, evacuations, and protective actions
+   - logistics: Equipment, supplies, and resource management
+   - recovery: Post-emergency and handover tasks
+
+5. Each task should include:
+   - A clear, actionable title (verb + object format, e.g., "Activate emergency communication system")
+   - A detailed description of what needs to be done and how
+   - Estimated duration in minutes (realistic estimates)
+   - Appropriate category
+
+6. Include 15-25 tasks covering the complete response lifecycle
+7. Reference specific local resources, contacts, and procedures from the response plan
+8. Consider the specific hazards and needs of the {{guideType}} emergency type
+
+RESPONSE FORMAT:
+Return ONLY a JSON array of tasks with this structure:
+[
+  {
+    "id": "unique-task-id-1",
+    "title": "Clear, actionable task title",
+    "description": "Detailed description of what to do and how",
+    "order": 1,
+    "estimated_duration_minutes": 15,
+    "category": "immediate|communication|safety|logistics|recovery"
+  }
+]
+
+IMPORTANT:
+- Use British English spelling
+- Make tasks specific to the location and emergency type
+- Ensure tasks flow logically from immediate response to recovery
+- Include coordination with external services where relevant
+- Return ONLY valid JSON, no explanations or markdown
+
+JSON response:`,
+  },
 }
 
 // Initialize default configurations if none exist

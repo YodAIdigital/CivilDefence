@@ -15,6 +15,10 @@ import type { Community, UserRole } from '@/types/database'
 import { Users, Plus, Search, Globe, Lock, Loader2, MapPin, LogOut, FileText, Trash2, AlertTriangle } from 'lucide-react'
 import { OnboardingWizard, type WizardData } from '@/components/community/onboarding-wizard'
 
+// Type assertion helper for new tables not yet in generated types
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any
+
 const WIZARD_STORAGE_KEY = 'civildefence_wizard_draft'
 
 interface CommunityWithMembership extends Community {
@@ -299,6 +303,29 @@ export default function CommunityPage() {
         await supabase.from('community_groups').insert(groupInserts)
       }
 
+      // Create emergency contacts if any
+      if (wizardData.emergencyContacts && wizardData.emergencyContacts.length > 0) {
+        const contactInserts = wizardData.emergencyContacts.map((contact, index) => ({
+          community_id: community.id,
+          name: contact.name,
+          phone: contact.phone,
+          description: contact.description || null,
+          icon: contact.icon,
+          category: contact.category,
+          display_order: index,
+          is_active: true,
+          created_by: user.id,
+        }))
+
+        const { error: contactsError } = await db
+          .from('community_emergency_contacts')
+          .insert(contactInserts)
+
+        if (contactsError) {
+          console.error('Error creating emergency contacts:', contactsError)
+        }
+      }
+
       // Create disaster guides from selected risks
       if (wizardData.selectedRisks.length > 0) {
         // Import guide templates
@@ -376,7 +403,75 @@ export default function CommunityPage() {
         })
 
         if (guideInserts.length > 0) {
-          await supabase.from('community_guides').insert(guideInserts)
+          // Insert guides and get back their IDs for SOP generation
+          const { data: createdGuides, error: guidesError } = await supabase
+            .from('community_guides')
+            .insert(guideInserts)
+            .select('id, name, guide_type, sections, custom_notes')
+
+          if (guidesError) {
+            console.error('Error creating guides:', guidesError)
+          } else if (createdGuides && createdGuides.length > 0) {
+            // Generate SOP templates for each guide
+            console.log('[Wizard] Generating SOP templates for', createdGuides.length, 'guides')
+
+            const sopGenerationPromises = createdGuides.map(async (guide) => {
+              try {
+                const response = await fetch('/api/generate-sop', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    guideId: guide.id,
+                    guideName: guide.name,
+                    guideType: guide.guide_type,
+                    sections: guide.sections,
+                    customNotes: guide.custom_notes,
+                    communityId: community.id,
+                  }),
+                })
+
+                if (!response.ok) {
+                  console.error('[Wizard] SOP generation failed for guide:', guide.name)
+                  return null
+                }
+
+                const result = await response.json()
+
+                // Create SOP template from generated tasks
+                if (result.tasks && result.tasks.length > 0) {
+                  // Use type assertion for new table that doesn't exist in generated types yet
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  const { error: sopError } = await (supabase as any)
+                    .from('sop_templates')
+                    .insert({
+                      community_id: community.id,
+                      guide_id: guide.id,
+                      name: `${guide.name} - Team SOP`,
+                      description: `Standard Operating Procedure for ${guide.name}`,
+                      tasks: result.tasks,
+                      is_active: true,
+                      created_by: user.id,
+                    })
+
+                  if (sopError) {
+                    console.error('[Wizard] Error saving SOP template for guide:', guide.name, sopError)
+                  } else {
+                    console.log('[Wizard] SOP template created for guide:', guide.name, 'with', result.tasks.length, 'tasks')
+                  }
+                }
+
+                return result
+              } catch (err) {
+                console.error('[Wizard] Error generating SOP for guide:', guide.name, err)
+                return null
+              }
+            })
+
+            // Run SOP generation in parallel (don't block community creation)
+            Promise.all(sopGenerationPromises).catch(err => {
+              console.error('[Wizard] Error in SOP generation batch:', err)
+            })
+          }
         }
 
         // Also store AI analysis in community settings

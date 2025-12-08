@@ -8,6 +8,7 @@ import { EventCalendar } from '@/components/calendar/event-calendar'
 import { PreparednessWidget } from '@/components/dashboard/preparedness-widget'
 import { PDFExportWidget } from '@/components/dashboard/pdf-export-widget'
 import { CommunityLocationsWidget } from '@/components/maps/community-locations-widget'
+import { DashboardSOPWidget } from '@/components/sop/dashboard-sop-widget'
 import { useAuth } from '@/contexts/auth-context'
 import { useNotifications } from '@/contexts/notification-context'
 import { useCommunity } from '@/contexts/community-context'
@@ -106,7 +107,7 @@ function saveNotifiedAlert(alertId: string) {
 export default function DashboardPage() {
   const { user } = useAuth()
   const { sendAlertNotification, permission } = useNotifications()
-  const { activeCommunity, canManageActiveCommunity } = useCommunity()
+  const { activeCommunity, canManageActiveCommunity, isActiveCommunityAdmin, isActiveCommunityTeamMember } = useCommunity()
   const [alerts, setAlerts] = useState<Alert[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const hasInitialFetch = useRef(false)
@@ -370,6 +371,15 @@ export default function DashboardPage() {
 
         {/* Community Locations */}
         <CommunityLocationsWidget />
+
+        {/* SOP Widget - Only show if user has an active community and can manage it */}
+        {activeCommunity && canManageActiveCommunity && user && (
+          <DashboardSOPWidget
+            communityId={activeCommunity.id}
+            userId={user.id}
+            userRole={isActiveCommunityAdmin ? 'admin' : isActiveCommunityTeamMember ? 'team_member' : 'member'}
+          />
+        )}
       </div>
 
       {/* Right Sidebar - PDF Export, Weather, Calendar & Schedule */}

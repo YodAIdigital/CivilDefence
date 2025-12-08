@@ -11,7 +11,8 @@ import {
   Loader2,
   Image as ImageIcon,
   Share2,
-  Download
+  Download,
+  X
 } from 'lucide-react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import type { WizardData } from '../onboarding-wizard'
@@ -39,6 +40,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
   const [copiedImage, setCopiedImage] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
+  const [showLightbox, setShowLightbox] = useState(false)
 
   const handleGeneratePromo = async () => {
     setIsGenerating(true)
@@ -147,30 +149,39 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
     setGeneratedPost(newText)
   }
 
+  const handleImageClick = () => {
+    if (generatedImageUrl && !imageError) {
+      setShowLightbox(true)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">Promote Your Community</h3>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Left Column - Style Selection & Generate */}
+      {/* 1/3 - 2/3 Grid Layout */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Left Column - Style Selection & Generate (1/3) */}
         <div className="space-y-4">
           <Card className="p-4">
             <p className="text-sm text-muted-foreground mb-3">Choose a style:</p>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-2">
               {STYLE_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setSelectedStyle(option.value)}
-                  className={`p-3 rounded-lg border-2 text-left transition-all ${
+                  className={`p-2 rounded-lg border-2 text-left transition-all ${
                     selectedStyle === option.value
                       ? 'border-primary bg-primary/5'
                       : 'border-muted hover:border-muted-foreground/30'
                   }`}
                 >
-                  <div className="font-medium text-sm">{option.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {option.description}
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-xs">{option.label}</span>
+                    <span className="text-[10px] text-muted-foreground">
+                      {option.description}
+                    </span>
                   </div>
                 </button>
               ))}
@@ -180,6 +191,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
               onClick={handleGeneratePromo}
               disabled={isGenerating || !data.communityName}
               className="w-full mt-4"
+              size="sm"
             >
               {isGenerating ? (
                 <>
@@ -189,7 +201,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
               ) : (
                 <>
                   <Sparkles className="h-4 w-4 mr-2" />
-                  {generatedPost ? 'Regenerate' : 'Generate Post & Image'}
+                  {generatedPost ? 'Regenerate' : 'Generate'}
                 </>
               )}
             </Button>
@@ -197,14 +209,14 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
 
           {error && (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="text-xs">{error}</AlertDescription>
             </Alert>
           )}
         </div>
 
-        {/* Right Column - Image & Post Preview */}
-        <div className="space-y-3">
-          {/* Image Preview - Always shown */}
+        {/* Right Column - Image & Post Preview (2/3) */}
+        <div className="md:col-span-2 space-y-3">
+          {/* Image Preview - Clickable */}
           <Card className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -219,12 +231,17 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
                 </Button>
               )}
             </div>
-            <div className="relative aspect-square rounded-lg overflow-hidden border bg-muted">
+            <div
+              className={`relative aspect-square max-w-xs mx-auto rounded-lg overflow-hidden border bg-muted ${
+                generatedImageUrl && !imageError ? 'cursor-pointer hover:ring-2 hover:ring-primary transition-all' : ''
+              }`}
+              onClick={handleImageClick}
+            >
               {generatedImageUrl && !imageError ? (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={generatedImageUrl}
-                  alt="Generated promotional image"
+                  alt="Generated promotional image - click to enlarge"
                   className="w-full h-full object-cover"
                   onError={() => setImageError(true)}
                 />
@@ -237,6 +254,9 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
                 </div>
               )}
             </div>
+            {generatedImageUrl && !imageError && (
+              <p className="text-xs text-muted-foreground text-center mt-2">Click image to preview</p>
+            )}
           </Card>
 
           {/* Post Text */}
@@ -244,7 +264,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
             <Textarea
               value={generatedPost || ''}
               onChange={(e) => handlePostTextChange(e.target.value)}
-              rows={8}
+              rows={5}
               className="font-sans text-sm resize-none border-0 p-0 focus-visible:ring-0"
               placeholder="Your generated post will appear here..."
               disabled={!generatedPost}
@@ -258,6 +278,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
               onClick={handleCopyImage}
               disabled={!generatedImageUrl || imageError}
               className="flex-1"
+              size="sm"
             >
               {copiedImage ? (
                 <>
@@ -276,6 +297,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
               onClick={handleCopyPost}
               disabled={!generatedPost}
               className="flex-1"
+              size="sm"
             >
               {copiedText ? (
                 <>
@@ -293,6 +315,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
               onClick={handleShareToFacebook}
               disabled={!generatedPost}
               className="flex-1 bg-[#1877F2] hover:bg-[#166FE5] disabled:bg-[#1877F2]/50"
+              size="sm"
             >
               <Share2 className="h-4 w-4 mr-2" />
               Share
@@ -300,6 +323,90 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
           </div>
         </div>
       </div>
+
+      {/* Lightbox Modal */}
+      {showLightbox && generatedImageUrl && (
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex items-center justify-center p-4"
+          onClick={() => setShowLightbox(false)}
+        >
+          <div
+            className="relative max-w-3xl w-full bg-background rounded-xl overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Close button */}
+            <button
+              onClick={() => setShowLightbox(false)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-black/50 text-white hover:bg-black/70 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Image */}
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={generatedImageUrl}
+                alt="Generated promotional image"
+                className="w-full h-auto max-h-[60vh] object-contain bg-black"
+              />
+            </div>
+
+            {/* Post text below image */}
+            {generatedPost && (
+              <div className="p-4 border-t bg-muted/50 max-h-[30vh] overflow-y-auto">
+                <p className="text-xs text-muted-foreground mb-2 font-medium">Post Text:</p>
+                <div className="text-sm whitespace-pre-wrap">{generatedPost}</div>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="p-4 border-t flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCopyImage}
+                size="sm"
+              >
+                {copiedImage ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-500" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon className="h-4 w-4 mr-2" />
+                    Copy Image
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={handleCopyPost}
+                disabled={!generatedPost}
+                size="sm"
+              >
+                {copiedText ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2 text-green-500" />
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Text
+                  </>
+                )}
+              </Button>
+              <Button asChild size="sm">
+                <a href={generatedImageUrl} download="community-promo.png" target="_blank" rel="noopener noreferrer">
+                  <Download className="h-4 w-4 mr-2" />
+                  Download
+                </a>
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

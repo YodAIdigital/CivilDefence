@@ -9,7 +9,9 @@ import { StepThree } from './wizard-steps/step-three'
 import { StepFour } from './wizard-steps/step-four'
 import { StepFive } from './wizard-steps/step-five'
 import { StepSix } from './wizard-steps/step-six'
+import { StepContacts } from './wizard-steps/step-contacts'
 import type { DisasterType } from '@/data/guide-templates'
+import type { EmergencyContactCategory } from '@/types/database'
 
 const WIZARD_STORAGE_KEY = 'civildefence_wizard_draft'
 const WIZARD_COMPLETED_KEY = 'civildefence_wizard_completed'
@@ -51,7 +53,17 @@ export interface WizardData {
     icon: string
   }>
 
-  // Step 5: Invitations
+  // Step 5: Emergency Contacts (regional)
+  emergencyContacts: Array<{
+    id: string
+    name: string
+    phone: string
+    description: string
+    icon: string
+    category: EmergencyContactCategory
+  }>
+
+  // Step 6: Invitations
   invitations: Array<{
     email: string
     role: 'member' | 'team_member' | 'admin'
@@ -59,7 +71,7 @@ export interface WizardData {
     groupName?: string // Optional group assignment
   }>
 
-  // Step 6: Facebook Promo (optional)
+  // Step 7: Facebook Promo (optional)
   facebookPromo?: {
     post: string
     imageUrl: string | null
@@ -85,7 +97,8 @@ const STEPS = [
   { id: 2, name: 'Define Area', description: 'Map your community boundaries' },
   { id: 3, name: 'Risk Assessment', description: 'AI-powered regional analysis' },
   { id: 4, name: 'Setup Groups', description: 'Organize your members' },
-  { id: 5, name: 'Invite Members', description: 'Add your team via email' },
+  { id: 5, name: 'Contacts', description: 'Regional emergency contacts' },
+  { id: 6, name: 'Invite Members', description: 'Add your team via email' },
 ]
 
 const DEFAULT_WIZARD_DATA: WizardData = {
@@ -104,6 +117,7 @@ const DEFAULT_WIZARD_DATA: WizardData = {
   regionOpacity: 0.3,
   regionMapImage: null,
   groups: [],
+  emergencyContacts: [],
   invitations: [],
 }
 
@@ -274,14 +288,16 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
   const handleNext = async () => {
     console.log('[Wizard] handleNext called, currentStep:', currentStep, 'isCustomizing:', isCustomizing)
     if (currentStep < STEPS.length) {
-      // When moving from step 3 (Risk Assessment) to step 4, auto-customize guides
+      // When moving from step 3 (Risk Assessment) to step 4, advance immediately and show loading
       if (currentStep === 3 && !wizardData.guideCustomizations && wizardData.selectedRisks.length > 0) {
-        console.log('[Wizard] Starting guide customization...')
-        await handleCustomizeGuides()
+        console.log('[Wizard] Advancing to step 4 and starting guide customization...')
+        setCurrentStep(prev => prev + 1) // Advance first
+        await handleCustomizeGuides() // Then customize (shows loading on step 4)
         console.log('[Wizard] Guide customization complete')
+      } else {
+        console.log('[Wizard] Advancing to step', currentStep + 1)
+        setCurrentStep(prev => prev + 1)
       }
-      console.log('[Wizard] Advancing to step', currentStep + 1)
-      setCurrentStep(prev => prev + 1)
     }
   }
 
@@ -466,6 +482,8 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
       case 4:
         return true // Groups are optional
       case 5:
+        return true // Emergency contacts are optional
+      case 6:
         return true // Invitations are optional
       default:
         return false
@@ -566,6 +584,9 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
               )
             )}
             {currentStep === 5 && (
+              <StepContacts data={wizardData} updateData={updateData} />
+            )}
+            {currentStep === 6 && (
               <StepFive data={wizardData} updateData={updateData} />
             )}
           </div>
@@ -589,18 +610,9 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
                 </Button>
               )}
               {currentStep < STEPS.length ? (
-                <Button onClick={handleNext} disabled={!isStepValid() || isCustomizing} className="gap-2 min-w-[100px]">
-                  {isCustomizing ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Customising...</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Next</span>
-                      <ArrowRight className="h-4 w-4" />
-                    </>
-                  )}
+                <Button onClick={handleNext} disabled={!isStepValid()} className="gap-2 min-w-[100px]">
+                  <span>Next</span>
+                  <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
                 <Button

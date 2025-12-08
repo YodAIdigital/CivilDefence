@@ -1,14 +1,19 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type {
   CommunityGuide,
   GuideSection,
   GuideEmergencyContact,
   GuideLocalResource,
+  SOPTemplateTask,
+  SOPTemplate,
 } from '@/types/database'
 import { IconPicker } from '@/components/ui/icon-picker'
 import { ColorPicker } from '@/components/ui/color-picker'
+import { SOPTemplateEditor } from '@/components/sop/sop-template-editor'
+import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/contexts/auth-context'
 
 // Convert legacy Tailwind gradient classes to hex colors
 function normalizeColor(color: string): string {
@@ -45,18 +50,20 @@ function normalizeColor(color: string): string {
 
 interface GuideEditorProps {
   guide: Partial<CommunityGuide>
-  onSave: (guide: Partial<CommunityGuide>) => Promise<void>
+  onSave: (guide: Partial<CommunityGuide>) => Promise<CommunityGuide | void>
   onCancel: () => void
   isNew?: boolean
+  communityId?: string
 }
 
-type TabType = 'details' | 'before' | 'during' | 'after' | 'supplies' | 'contacts' | 'resources'
+type TabType = 'details' | 'before' | 'during' | 'after' | 'supplies' | 'contacts' | 'resources' | 'sop'
 
 function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 }
 
-export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEditorProps) {
+export function GuideEditor({ guide, onSave, onCancel, isNew = false, communityId }: GuideEditorProps) {
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<TabType>('details')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +94,96 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
     (guide.local_resources as GuideLocalResource[]) || []
   )
 
+  // SOP state
+  const [sopTemplate, setSopTemplate] = useState<SOPTemplate | null>(null)
+  const [sopTasks, setSopTasks] = useState<SOPTemplateTask[]>([])
+  const [isLoadingSop, setIsLoadingSop] = useState(false)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [sopError, _setSopError] = useState<string | null>(null)
+  const [sopTeamMembers, setSopTeamMembers] = useState<Array<{
+    id: string
+    full_name: string | null
+    email: string
+    role: 'admin' | 'team_member'
+  }>>([])
+
+  // Fetch team members for SOP assignment dropdown
+  useEffect(() => {
+    const fetchTeamMembers = async () => {
+      const targetCommunityId = communityId || guide.community_id
+      if (!targetCommunityId) return
+
+      try {
+        const { data, error } = await supabase
+          .from('community_members')
+          .select('user_id, role, profiles:profiles(id, full_name, email)')
+          .eq('community_id', targetCommunityId)
+          .in('role', ['admin', 'team_member'])
+
+        if (error) {
+          console.error('Error fetching team members:', error)
+          return
+        }
+
+        const members = (data || [])
+          .map((m) => {
+            const profile = m.profiles as unknown as { id: string; full_name: string | null; email: string } | null
+            if (!profile) return null
+            return {
+              id: profile.id,
+              full_name: profile.full_name,
+              email: profile.email,
+              role: m.role as 'admin' | 'team_member',
+            }
+          })
+          .filter(Boolean) as Array<{
+            id: string
+            full_name: string | null
+            email: string
+            role: 'admin' | 'team_member'
+          }>
+
+        setSopTeamMembers(members)
+      } catch (err) {
+        console.error('Error fetching team members:', err)
+      }
+    }
+
+    fetchTeamMembers()
+  }, [communityId, guide.community_id])
+
+  // Load existing SOP template when guide has an ID
+  useEffect(() => {
+    const loadSopTemplate = async () => {
+      if (!guide.id) return
+
+      setIsLoadingSop(true)
+      try {
+        // Use type assertion for new table that doesn't exist in generated types yet
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data, error } = await (supabase as any)
+          .from('sop_templates')
+          .select('*')
+          .eq('guide_id', guide.id)
+          .single() as { data: SOPTemplate | null; error: { code: string; message: string } | null }
+
+        if (error && error.code !== 'PGRST116') {
+          // PGRST116 = no rows returned (which is fine)
+          console.error('Error loading SOP template:', error)
+        } else if (data) {
+          setSopTemplate(data)
+          setSopTasks((data.tasks as SOPTemplateTask[]) || [])
+        }
+      } catch (err) {
+        console.error('Error loading SOP template:', err)
+      } finally {
+        setIsLoadingSop(false)
+      }
+    }
+
+    loadSopTemplate()
+  }, [guide.id])
+
   const tabs: { id: TabType; label: string; icon: string }[] = [
     { id: 'details', label: 'Details', icon: 'info' },
     { id: 'before', label: 'Before', icon: 'event' },
@@ -95,6 +192,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
     { id: 'supplies', label: 'Supplies', icon: 'inventory_2' },
     { id: 'contacts', label: 'Contacts', icon: 'contacts' },
     { id: 'resources', label: 'Local Resources', icon: 'place' },
+    { id: 'sop', label: 'Team SOP', icon: 'checklist' },
   ]
 
   // Section handlers
@@ -190,6 +288,55 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
     setResources((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // SOP handlers
+  const handleSopTasksChange = (tasks: SOPTemplateTask[]) => {
+    setSopTasks(tasks)
+  }
+
+  const saveSopTemplate = async (guideId: string, userId: string) => {
+    // If no tasks, delete existing template
+    if (sopTasks.length === 0) {
+      if (sopTemplate) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
+          .from('sop_templates')
+          .delete()
+          .eq('id', sopTemplate.id)
+      }
+      return
+    }
+
+    const templateData = {
+      community_id: communityId || guide.community_id,
+      guide_id: guideId,
+      name: `${name} - Team SOP`,
+      description: `Standard Operating Procedure for ${name}`,
+      tasks: sopTasks,
+      is_active: true,
+    }
+
+    if (sopTemplate) {
+      // Update existing template
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('sop_templates')
+        .update({
+          ...templateData,
+          updated_by: userId,
+        })
+        .eq('id', sopTemplate.id)
+    } else {
+      // Create new template
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
+        .from('sop_templates')
+        .insert({
+          ...templateData,
+          created_by: userId,
+        })
+    }
+  }
+
   // Save handler
   const handleSave = async () => {
     if (!name.trim()) {
@@ -202,7 +349,7 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
     setError(null)
 
     try {
-      await onSave({
+      const savedGuide = await onSave({
         ...guide,
         name: name.trim(),
         description: description.trim() || null,
@@ -216,6 +363,17 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
         emergency_contacts: contacts.filter((c) => c.name.trim() || c.number.trim()),
         local_resources: resources.filter((r) => r.name.trim()),
       })
+
+      // Save SOP template if we have tasks
+      const guideId = savedGuide?.id || guide.id
+      if (guideId && user && sopTasks.length > 0) {
+        try {
+          await saveSopTemplate(guideId, user.id)
+        } catch (sopErr) {
+          console.error('Error saving SOP template:', sopErr)
+          // Don't fail the whole save for SOP errors
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save response plan')
     } finally {
@@ -668,6 +826,33 @@ export function GuideEditor({ guide, onSave, onCancel, isNew = false }: GuideEdi
                   </div>
                 ))}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* SOP Tab */}
+        {activeTab === 'sop' && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-4">
+            {isLoadingSop ? (
+              <div className="flex items-center justify-center py-8">
+                <span className="material-icons animate-spin text-2xl text-primary">sync</span>
+                <span className="ml-2 text-muted-foreground">Loading SOP template...</span>
+              </div>
+            ) : (
+              <>
+                {sopError && (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive mb-4">
+                    {sopError}
+                  </div>
+                )}
+
+                <SOPTemplateEditor
+                  tasks={sopTasks}
+                  onChange={handleSopTasksChange}
+                  readOnly={false}
+                  teamMembers={sopTeamMembers}
+                />
+              </>
             )}
           </div>
         )}
