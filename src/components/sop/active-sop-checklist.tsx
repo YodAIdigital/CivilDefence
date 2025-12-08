@@ -786,7 +786,7 @@ export function ActiveSOPChecklist({
                           let noteLines: string[] = []
                           let timestampLine: string | null = null
 
-                          if (timestampLineIdx !== -1) {
+                          if (timestampLineIdx !== -1 && lines[timestampLineIdx]) {
                             timestampLine = lines[timestampLineIdx].replace(/^\[|\]$/g, '') // Remove brackets
                             noteLines = lines.filter((_, idx) => idx !== timestampLineIdx)
                           } else {

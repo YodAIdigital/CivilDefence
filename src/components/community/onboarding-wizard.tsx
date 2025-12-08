@@ -9,7 +9,6 @@ import { StepThree } from './wizard-steps/step-three'
 import { StepFour } from './wizard-steps/step-four'
 import { StepFive } from './wizard-steps/step-five'
 import { StepSix } from './wizard-steps/step-six'
-import { StepContacts } from './wizard-steps/step-contacts'
 import type { DisasterType } from '@/data/guide-templates'
 import type { EmergencyContactCategory } from '@/types/database'
 
@@ -97,8 +96,7 @@ const STEPS = [
   { id: 2, name: 'Define Area', description: 'Map your community boundaries' },
   { id: 3, name: 'Risk Assessment', description: 'AI-powered regional analysis' },
   { id: 4, name: 'Setup Groups', description: 'Organize your members' },
-  { id: 5, name: 'Contacts', description: 'Regional emergency contacts' },
-  { id: 6, name: 'Invite Members', description: 'Add your team via email' },
+  { id: 5, name: 'Invite Members', description: 'Add your team via email' },
 ]
 
 const DEFAULT_WIZARD_DATA: WizardData = {
@@ -134,7 +132,7 @@ function hasProgress(data: WizardData): boolean {
   )
 }
 
-export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWizardProps) {
+export function OnboardingWizard({ userId, onComplete, onCancel, onDone }: OnboardingWizardProps) {
   const [currentStep, setCurrentStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isCustomizing, setIsCustomizing] = useState(false)
@@ -241,6 +239,49 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
     })
   }
 
+  // Auto-research and add emergency contacts in the background
+  const handleAutoResearchContacts = async () => {
+    if (!wizardData.location) return
+
+    try {
+      const response = await fetch('/api/research-contacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          location: wizardData.location,
+          regionMapImage: wizardData.regionMapImage,
+          aiAnalysis: wizardData.aiAnalysis,
+        }),
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        const contacts = result.contacts || []
+
+        // Auto-add ALL contacts (not just important ones)
+        if (contacts.length > 0) {
+          const newContacts = contacts.map((c: { name: string; phone: string; description: string; icon: string; category: EmergencyContactCategory }, index: number) => ({
+            id: `ai-contact-${Date.now()}-${index}`,
+            name: c.name,
+            phone: c.phone,
+            description: c.description,
+            icon: c.icon,
+            category: c.category,
+          }))
+
+          setWizardData(prev => ({
+            ...prev,
+            emergencyContacts: newContacts
+          }))
+          console.log(`[Wizard] Auto-added ${newContacts.length} emergency contacts`)
+        }
+      }
+    } catch (err) {
+      console.error('[Wizard] Error auto-researching contacts:', err)
+      // Continue anyway - contact research is not critical
+    }
+  }
+
   // Customize guides when moving from step 3 (Risk Assessment) to step 4
   const handleCustomizeGuides = async () => {
     if (wizardData.selectedRisks.length === 0) return
@@ -248,21 +289,26 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
     setIsCustomizing(true)
 
     try {
-      const response = await fetch('/api/customize-guides', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          location: wizardData.location,
-          latitude: wizardData.meetingPointLat,
-          longitude: wizardData.meetingPointLng,
-          selectedRisks: wizardData.selectedRisks,
-          aiAnalysis: wizardData.aiAnalysis,
-          regionMapImage: wizardData.regionMapImage,
+      // Run guide customization and contact research in parallel
+      const [guideResponse] = await Promise.all([
+        fetch('/api/customize-guides', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            location: wizardData.location,
+            latitude: wizardData.meetingPointLat,
+            longitude: wizardData.meetingPointLng,
+            selectedRisks: wizardData.selectedRisks,
+            aiAnalysis: wizardData.aiAnalysis,
+            regionMapImage: wizardData.regionMapImage,
+          }),
         }),
-      })
+        // Auto-research contacts in background (don't wait for it)
+        handleAutoResearchContacts(),
+      ])
 
-      if (response.ok) {
-        const result = await response.json()
+      if (guideResponse.ok) {
+        const result = await guideResponse.json()
 
         // Convert array to record keyed by risk type
         const customizations: Record<string, any> = {}
@@ -388,7 +434,7 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
 
             {/* Promo Content */}
             <div className="p-6">
-              <StepSix data={wizardData} updateData={updateData} communityId={createdCommunityId || undefined} />
+              <StepSix data={wizardData} updateData={updateData} communityId={createdCommunityId || undefined} userId={userId} />
             </div>
 
             {/* Footer */}
@@ -584,9 +630,6 @@ export function OnboardingWizard({ onComplete, onCancel, onDone }: OnboardingWiz
               )
             )}
             {currentStep === 5 && (
-              <StepContacts data={wizardData} updateData={updateData} />
-            )}
-            {currentStep === 6 && (
               <StepFive data={wizardData} updateData={updateData} />
             )}
           </div>

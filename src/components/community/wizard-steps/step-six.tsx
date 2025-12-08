@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,6 +21,7 @@ interface StepSixProps {
   data: WizardData
   updateData: (updates: Partial<WizardData>) => void
   communityId?: string | undefined // The newly created community ID for signup link
+  userId?: string | undefined // Current user ID for creating invite links
 }
 
 const STYLE_OPTIONS = [
@@ -30,7 +31,7 @@ const STYLE_OPTIONS = [
   { value: 'modern', label: 'Modern', description: 'Minimalist' },
 ] as const
 
-export function StepSix({ data, updateData, communityId }: StepSixProps) {
+export function StepSix({ data, updateData, communityId, userId }: StepSixProps) {
   const [isGenerating, setIsGenerating] = useState(false)
   // Initialize from saved data if available
   const [selectedStyle, setSelectedStyle] = useState<string>(data.facebookPromo?.style || 'community')
@@ -41,6 +42,44 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
   const [error, setError] = useState<string | null>(null)
   const [imageError, setImageError] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
+  const [inviteCode, setInviteCode] = useState<string | null>(null)
+  const [isLoadingLink, setIsLoadingLink] = useState(false)
+
+  // Fetch or create public invite link when component mounts with communityId
+  useEffect(() => {
+    const getOrCreateInviteLink = async () => {
+      if (!communityId || !userId) return
+
+      setIsLoadingLink(true)
+      try {
+        // First, try to fetch existing link
+        const fetchResponse = await fetch(`/api/public-link?communityId=${communityId}`)
+        const fetchData = await fetchResponse.json()
+
+        if (fetchData.link?.code) {
+          setInviteCode(fetchData.link.code)
+        } else {
+          // No existing link, create one
+          const createResponse = await fetch('/api/public-link', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ communityId, userId }),
+          })
+          const createData = await createResponse.json()
+
+          if (createData.link?.code) {
+            setInviteCode(createData.link.code)
+          }
+        }
+      } catch (err) {
+        console.error('Error getting invite link:', err)
+      } finally {
+        setIsLoadingLink(false)
+      }
+    }
+
+    getOrCreateInviteLink()
+  }, [communityId, userId])
 
   const handleGeneratePromo = async () => {
     setIsGenerating(true)
@@ -48,11 +87,19 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
     setImageError(false)
 
     try {
-      // Generate signup link for the community
+      // Generate signup link using invite code if available
       const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://civildefence.pro'
-      const signupLink = communityId
-        ? `${baseUrl}/community/${communityId}`
-        : `${baseUrl}/community`
+      let signupLink: string
+
+      if (inviteCode) {
+        // Use the unique invite link
+        signupLink = `${baseUrl}/join/${inviteCode}`
+      } else if (communityId) {
+        // Fallback to community page
+        signupLink = `${baseUrl}/community/${communityId}`
+      } else {
+        signupLink = `${baseUrl}/community`
+      }
 
       const response = await fetch('/api/generate-promo-image', {
         method: 'POST',
@@ -189,7 +236,7 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
 
             <Button
               onClick={handleGeneratePromo}
-              disabled={isGenerating || !data.communityName}
+              disabled={isGenerating || isLoadingLink || !data.communityName}
               className="w-full mt-4"
               size="sm"
             >
@@ -197,6 +244,11 @@ export function StepSix({ data, updateData, communityId }: StepSixProps) {
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Generating...
+                </>
+              ) : isLoadingLink ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Setting up link...
                 </>
               ) : (
                 <>

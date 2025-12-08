@@ -1039,6 +1039,61 @@ export interface Database {
           }
         ]
       }
+      community_public_links: {
+        Row: {
+          id: string
+          community_id: string
+          code: string
+          created_by: string
+          role: 'member' | 'team_member'
+          is_active: boolean
+          uses_count: number
+          max_uses: number | null
+          expires_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          community_id: string
+          code?: string
+          created_by: string
+          role?: 'member' | 'team_member'
+          is_active?: boolean
+          uses_count?: number
+          max_uses?: number | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          community_id?: string
+          code?: string
+          created_by?: string
+          role?: 'member' | 'team_member'
+          is_active?: boolean
+          uses_count?: number
+          max_uses?: number | null
+          expires_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'community_public_links_community_id_fkey'
+            columns: ['community_id']
+            referencedRelation: 'communities'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'community_public_links_created_by_fkey'
+            columns: ['created_by']
+            referencedRelation: 'profiles'
+            referencedColumns: ['id']
+          }
+        ]
+      }
       ai_prompt_configs: {
         Row: {
           id: string
@@ -1146,6 +1201,7 @@ export type UserChecklist = Tables<'user_checklists'>
 export type ActivityLog = Tables<'activity_log'>
 export type CommunityEvent = Tables<'community_events'>
 export type EventRsvp = Tables<'event_rsvps'>
+export type CommunityPublicLink = Tables<'community_public_links'>
 
 // Insert types
 export type ProfileInsert = Inserts<'profiles'>
