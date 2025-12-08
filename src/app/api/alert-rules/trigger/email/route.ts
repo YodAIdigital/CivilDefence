@@ -87,6 +87,8 @@ export async function POST(request: NextRequest) {
     console.log('Email trigger received for:', recipientEmail)
 
     // Find the rule by trigger email
+    // Note: Rules can have trigger_type 'webhook' or 'email' but all rules get both
+    // a webhook URL and trigger email, so we just match by trigger_email
     const { data: rule, error: ruleError } = await supabase
       .from('community_alert_rules')
       .select(`
@@ -97,7 +99,6 @@ export async function POST(request: NextRequest) {
         )
       `)
       .eq('trigger_email', recipientEmail)
-      .eq('trigger_type', 'email')
       .eq('is_active', true)
       .single()
 
