@@ -8,11 +8,15 @@ import type { ParsedDocument } from '../types'
 
 export async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
   try {
-    // Get document proxy for metadata
-    const pdf = await getDocumentProxy(new Uint8Array(buffer))
+    // Create a copy of the buffer to avoid detached ArrayBuffer issues
+    const bufferCopy = buffer.slice(0)
+    const uint8Array = new Uint8Array(bufferCopy)
 
-    // Extract text from all pages
-    const { text, totalPages } = await extractText(new Uint8Array(buffer), {
+    // Get document proxy for metadata
+    const pdf = await getDocumentProxy(uint8Array)
+
+    // Extract text from all pages (create fresh copy for each operation)
+    const { text, totalPages } = await extractText(new Uint8Array(buffer.slice(0)), {
       mergePages: true,
     })
 
@@ -20,7 +24,7 @@ export async function parsePdf(buffer: ArrayBuffer): Promise<ParsedDocument> {
     const pages: { pageNumber: number; text: string }[] = []
 
     // Extract text without merging to get page-by-page text
-    const pageResult = await extractText(new Uint8Array(buffer), {
+    const pageResult = await extractText(new Uint8Array(buffer.slice(0)), {
       mergePages: false,
     })
 
