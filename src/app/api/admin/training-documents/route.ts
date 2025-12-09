@@ -114,9 +114,10 @@ export async function GET(request: NextRequest) {
       offset,
     })
   } catch (error) {
-    console.error('[Training Documents API] Error:', error)
+    console.error('[Training Documents API] GET Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${errorMessage}` },
       { status: 500 }
     )
   }
@@ -181,7 +182,7 @@ export async function POST(request: NextRequest) {
     if (uploadError) {
       console.error('[Training Documents API] Upload error:', uploadError)
       return NextResponse.json(
-        { error: 'Failed to upload file' },
+        { error: `Failed to upload file: ${uploadError.message}` },
         { status: 500 }
       )
     }
@@ -210,7 +211,7 @@ export async function POST(request: NextRequest) {
       // Try to clean up uploaded file
       await getSupabaseAdmin().storage.from('training-documents').remove([filePath])
       return NextResponse.json(
-        { error: 'Failed to create document record' },
+        { error: `Failed to create document record: ${insertError.message}` },
         { status: 500 }
       )
     }
@@ -220,9 +221,10 @@ export async function POST(request: NextRequest) {
       message: 'Document uploaded successfully. Processing will begin automatically.',
     })
   } catch (error) {
-    console.error('[Training Documents API] Error:', error)
+    console.error('[Training Documents API] POST Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: `Internal server error: ${errorMessage}` },
       { status: 500 }
     )
   }

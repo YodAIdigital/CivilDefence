@@ -394,9 +394,9 @@ You may use this knowledge base information to provide more detailed and accurat
   }, [disconnect, onClose])
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 w-80 bg-background border rounded-xl shadow-2xl flex flex-col max-h-[28rem]">
+    <div className="fixed z-50 bg-background border shadow-2xl flex flex-col bottom-0 right-0 left-0 w-full h-[100dvh] sm:bottom-4 sm:right-4 sm:left-auto sm:w-80 sm:h-auto sm:max-h-[28rem] sm:rounded-xl">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 rounded-t-xl">
+      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/30 sm:rounded-t-xl safe-area-top">
         <div className="flex items-center gap-2 min-w-0">
           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
             status === 'connected' ? 'bg-green-500' :

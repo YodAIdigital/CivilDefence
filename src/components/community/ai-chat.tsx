@@ -154,13 +154,15 @@ export function AIChat({ communityId, communityName }: AIChatProps) {
 
   return (
     <div
-      className={`fixed bottom-4 right-4 z-50 flex flex-col bg-background border rounded-xl shadow-2xl transition-all duration-200 ${
-        isMinimized ? 'w-80 h-14' : 'w-96 h-[32rem] max-h-[80vh]'
+      className={`fixed z-50 flex flex-col bg-background border rounded-xl shadow-2xl transition-all duration-200 ${
+        isMinimized
+          ? 'bottom-4 right-4 w-72 sm:w-80 h-14'
+          : 'bottom-0 right-0 left-0 sm:bottom-4 sm:right-4 sm:left-auto w-full sm:w-96 h-[100dvh] sm:h-[32rem] sm:max-h-[80vh] sm:rounded-xl rounded-none'
       }`}
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 rounded-t-xl cursor-pointer"
+        className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 sm:rounded-t-xl cursor-pointer safe-area-top"
         onClick={() => isMinimized && setIsMinimized(false)}
       >
         <div className="flex items-center gap-2">
