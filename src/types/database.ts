@@ -3105,3 +3105,88 @@ export const SUGGESTED_COMMUNITY_CONTACTS = [
   { name: 'Pharmacy', description: 'Local pharmacy', icon: 'medical_services', category: 'health' as const },
   { name: 'Vet Clinic', description: 'Local veterinary clinic', icon: 'pets', category: 'local' as const },
 ] as const
+
+// ============================================================================
+// RAG (Retrieval-Augmented Generation) Types
+// ============================================================================
+
+export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'error'
+export type DocumentFileType = 'pdf' | 'docx' | 'txt' | 'image'
+
+export interface TrainingDocument {
+  id: string
+  name: string
+  description: string | null
+  file_url: string
+  file_type: DocumentFileType
+  file_size: number
+  mime_type: string
+  status: DocumentStatus
+  error_message: string | null
+  uploaded_by: string
+  chunk_count: number
+  total_tokens: number
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateTrainingDocument {
+  name: string
+  description?: string
+  file_url: string
+  file_type: DocumentFileType
+  file_size: number
+  mime_type: string
+  uploaded_by: string
+  metadata?: Record<string, unknown>
+}
+
+export interface DocumentChunk {
+  id: string
+  document_id: string
+  chunk_index: number
+  content: string
+  contextual_content: string
+  embedding: number[]
+  token_count: number
+  metadata: {
+    source: string
+    page_number?: number
+    section?: string
+    heading?: string
+    [key: string]: unknown
+  }
+  created_at: string
+}
+
+export interface RagQueryLog {
+  id: string
+  user_id: string
+  community_id: string | null
+  query_text: string
+  retrieved_chunk_ids: string[]
+  retrieval_scores: number[]
+  model_used: string
+  response_text: string | null
+  latency_ms: number | null
+  created_at: string
+}
+
+export interface RetrievalResult {
+  chunk_id: string
+  document_id: string
+  content: string
+  contextual_content: string
+  metadata: Record<string, unknown>
+  semantic_rank?: number
+  fts_rank?: number
+  rrf_score: number
+}
+
+export interface HybridSearchParams {
+  query_embedding: number[]
+  query_text: string
+  match_count?: number
+  rrf_k?: number
+}

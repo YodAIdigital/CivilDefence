@@ -23,9 +23,11 @@ interface EventCalendarProps {
   showHeader?: boolean
   maxEvents?: number
   compact?: boolean
+  showCreateButton?: boolean
+  onCreateClick?: () => void
 }
 
-export function EventCalendar({ showHeader = true, maxEvents = 5, compact = false }: EventCalendarProps) {
+export function EventCalendar({ showHeader = true, maxEvents = 5, compact = false, showCreateButton = false, onCreateClick }: EventCalendarProps) {
   const { user } = useAuth()
   const { activeCommunity } = useCommunity()
   const [events, setEvents] = useState<EventWithCommunity[]>([])
@@ -258,6 +260,17 @@ export function EventCalendar({ showHeader = true, maxEvents = 5, compact = fals
               )
             })}
           </div>
+        )}
+
+        {/* Create Event Button */}
+        {showCreateButton && onCreateClick && (
+          <button
+            onClick={onCreateClick}
+            className="mt-4 w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+          >
+            <span className="material-icons text-lg">add</span>
+            Create Event
+          </button>
         )}
       </div>
     )

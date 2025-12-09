@@ -24,6 +24,7 @@ interface AlertRequest {
   sendEmail: boolean
   sendSms: boolean
   sendAppAlert: boolean
+  sendPushNotification?: boolean // Browser/mobile push notifications
 }
 
 export async function POST(request: NextRequest) {
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       sendEmail: shouldSendEmail,
       sendSms: shouldSendSms,
       sendAppAlert,
+      sendPushNotification: shouldSendPush = sendAppAlert, // Default to sendAppAlert for backwards compatibility
     } = body
 
     // Validate required fields
@@ -379,12 +381,12 @@ export async function POST(request: NextRequest) {
     }
     console.log('=== END SMS DEBUG ===')
 
-    // Send push notifications if app alert is enabled
+    // Send push notifications if push notification is enabled
     let pushSent = 0
     let pushFailed = 0
     const expiredSubscriptions: string[] = []
 
-    if (sendAppAlert) {
+    if (shouldSendPush) {
       console.log('=== PUSH NOTIFICATION DEBUG ===')
       console.log('Fetching push subscriptions for', recipientUserIds.length, 'users')
 

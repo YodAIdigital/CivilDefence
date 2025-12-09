@@ -486,32 +486,44 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
       doc.text('Required Supplies:', 25, y)
-      y += 7
+      y += 10
 
-      doc.setFontSize(10)
+      doc.setFontSize(9)
       doc.setTextColor(80, 80, 80)
       doc.setFont('helvetica', 'normal')
 
       const suppliesPerRow = 2
       const colWidth = (pageWidth - 60) / suppliesPerRow
+      const textMaxWidth = colWidth - 12 // Account for checkbox and padding
 
       guide.supplies.forEach((supply: string, idx: number) => {
         const col = idx % suppliesPerRow
         const row = Math.floor(idx / suppliesPerRow)
 
         if (col === 0 && row > 0) {
-          y += 6
-          y = checkNewPage(doc, y, 10)
+          y += 8
+          y = checkNewPage(doc, y, 12)
         }
 
         // Draw checkbox square manually since Unicode boxes don't render in jsPDF
-        const checkboxX = 30 + col * colWidth
+        const checkboxX = 25 + col * colWidth
         doc.setDrawColor(100, 100, 100)
         doc.setLineWidth(0.3)
         doc.rect(checkboxX, y - 3, 4, 4)
-        doc.text(supply, checkboxX + 7, y)
+
+        // Truncate text if too long for the column
+        let displayText = supply
+        const textWidth = doc.getTextWidth(supply)
+        if (textWidth > textMaxWidth) {
+          // Truncate and add ellipsis
+          while (doc.getTextWidth(displayText + '...') > textMaxWidth && displayText.length > 0) {
+            displayText = displayText.slice(0, -1)
+          }
+          displayText += '...'
+        }
+        doc.text(displayText, checkboxX + 7, y)
       })
-      y += 12
+      y += 14
     }
 
     // Emergency contacts for this guide
@@ -522,18 +534,27 @@ function generateResponsePlans(doc: jsPDF, data: PDFExportData): void {
       doc.setTextColor(0, 5, 66)
       doc.setFont('helvetica', 'bold')
       doc.text('Emergency Contacts for this Plan:', 25, y)
-      y += 8
+      y += 10
 
       guide.emergency_contacts.forEach(contact => {
-        y = checkNewPage(doc, y, 10)
+        y = checkNewPage(doc, y, 12)
         doc.setFontSize(10)
-        doc.setTextColor(80, 80, 80)
+        doc.setTextColor(0, 5, 66)
         doc.setFont('helvetica', 'bold')
-        doc.text(contact.name, 30, y)
-        doc.setFont('helvetica', 'normal')
-        // Add proper spacing between name and number
-        doc.text(` - ${contact.number} - ${contact.description}`, 30 + doc.getTextWidth(contact.name), y)
-        y += 7
+        // Contact name with number on same line
+        const contactLine = `${contact.name}: ${contact.number}`
+        doc.text(contactLine, 30, y)
+
+        // Description on next line with proper wrapping
+        if (contact.description) {
+          y += 5
+          doc.setFont('helvetica', 'normal')
+          doc.setTextColor(80, 80, 80)
+          const descLines = doc.splitTextToSize(`- ${contact.description}`, pageWidth - 60)
+          doc.text(descLines, 30, y)
+          y += descLines.length * 4.5
+        }
+        y += 4
       })
     }
   })
@@ -621,30 +642,30 @@ function generateChecklistPages(doc: jsPDF, data: PDFExportData): void {
 
     // Underline
     doc.setDrawColor(200, 200, 210)
-    doc.setLineWidth(0.3)
+    doc.setLineWidth(0.5)
     doc.line(20, y + 10, pageWidth - 20, y + 10)
 
     y += 18
 
     // Items with larger font
     category.items.forEach((item) => {
-      y = checkNewPage(doc, y, 10)
+      y = checkNewPage(doc, y, 12)
 
-      // Checkbox
-      doc.setDrawColor(150, 150, 150)
-      doc.setLineWidth(0.3)
-      doc.rect(20, y - 3.5, 4.5, 4.5)
+      // Checkbox - larger and more visible
+      doc.setDrawColor(120, 120, 120)
+      doc.setLineWidth(0.5)
+      doc.rect(20, y - 4, 5, 5)
 
       if (item.checked) {
         doc.setFillColor(34, 197, 94)
-        doc.rect(20.5, y - 3, 3.5, 3.5, 'F')
+        doc.rect(20.5, y - 3.5, 4, 4, 'F')
       }
 
       // Item text - larger font
       doc.setFontSize(10)
       doc.setTextColor(item.checked ? 100 : 50, item.checked ? 100 : 50, item.checked ? 100 : 50)
       doc.setFont('helvetica', 'normal')
-      doc.text(item.name, 29, y)
+      doc.text(item.name, 30, y)
 
       // Last checked date if available
       if (item.checked && item.lastChecked) {
@@ -655,10 +676,10 @@ function generateChecklistPages(doc: jsPDF, data: PDFExportData): void {
         doc.text(`(${dateStr})`, pageWidth - 20, y, { align: 'right' })
       }
 
-      y += 7
+      y += 8
     })
 
-    y += 8
+    y += 10
   })
 
   // Recheck reminder - no fill, just border
@@ -985,22 +1006,28 @@ function generatePersonalProfilePage(doc: jsPDF, data: PDFExportData): void {
     doc.setFont('helvetica', 'normal')
 
     if (profile.has_backup_power) {
-      doc.setTextColor(34, 197, 94)
-      doc.text('✓', 25, y)
+      // Draw checkbox with checkmark
+      doc.setDrawColor(34, 197, 94)
+      doc.setFillColor(34, 197, 94)
+      doc.rect(25, y - 3.5, 4, 4, 'FD')
       doc.setTextColor(60, 60, 60)
       doc.text('Emergency backup power available', 33, y)
       y += 8
     }
     if (profile.has_backup_water) {
-      doc.setTextColor(34, 197, 94)
-      doc.text('✓', 25, y)
+      // Draw checkbox with checkmark
+      doc.setDrawColor(34, 197, 94)
+      doc.setFillColor(34, 197, 94)
+      doc.rect(25, y - 3.5, 4, 4, 'FD')
       doc.setTextColor(60, 60, 60)
       doc.text('Backup water supply available', 33, y)
       y += 8
     }
     if (profile.has_food_supply) {
-      doc.setTextColor(34, 197, 94)
-      doc.text('✓', 25, y)
+      // Draw checkbox with checkmark
+      doc.setDrawColor(34, 197, 94)
+      doc.setFillColor(34, 197, 94)
+      doc.rect(25, y - 3.5, 4, 4, 'FD')
       doc.setTextColor(60, 60, 60)
       doc.text('Food supply for 5+ days', 33, y)
       y += 8

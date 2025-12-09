@@ -7,8 +7,9 @@ import { supabase } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/auth-context'
 import { useCommunity } from '@/contexts/community-context'
 import { MapPin, Phone, Mail, Navigation, ChevronDown, ChevronUp, Search, X, Users } from 'lucide-react'
+import { MemberProfileCard } from '@/components/community/member-profile-card'
 import type { CommunityMapPoint, MapPointType, RegionPolygon } from '@/types/database'
-import { MAP_POINT_TYPE_CONFIG, COMMUNITY_ROLE_CONFIG, SKILL_OPTIONS, EQUIPMENT_OPTIONS } from '@/types/database'
+import { MAP_POINT_TYPE_CONFIG } from '@/types/database'
 
 interface CommunityRegionData {
   id: string
@@ -28,7 +29,7 @@ export function CommunityLocationsWidget({
   maxHeight = '400px',
 }: CommunityLocationsWidgetProps) {
   const { user } = useAuth()
-  const { activeCommunity } = useCommunity()
+  const { activeCommunity, isActiveCommunityAdmin } = useCommunity()
   const [locations, setLocations] = useState<CommunityMapPoint[]>([])
   const [communityRegions, setCommunityRegions] = useState<CommunityRegionData[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -515,83 +516,22 @@ export function CommunityLocationsWidget({
           </button>
 
           {showMemberList && (
-            <div className="divide-y divide-border max-h-[300px] overflow-y-auto">
-              {filteredMembers.map(member => {
-                const roleConfig = COMMUNITY_ROLE_CONFIG[member.role]
-                return (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors"
-                  >
-                    <div
-                      className="flex h-10 w-10 items-center justify-center rounded-full flex-shrink-0"
-                      style={{ backgroundColor: `${roleConfig?.color || '#6b7280'}20` }}
-                    >
-                      <span
-                        className="material-icons text-xl"
-                        style={{ color: roleConfig?.color || '#6b7280' }}
-                      >
-                        person
-                      </span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate flex items-center gap-2">
-                        {member.profile?.full_name || member.profile?.email || 'Unknown'}
-                        {member.role !== 'member' && roleConfig && (
-                          <span
-                            className="text-xs px-1.5 py-0.5 rounded-full"
-                            style={{
-                              backgroundColor: `${roleConfig.color}20`,
-                              color: roleConfig.color
-                            }}
-                          >
-                            {roleConfig.label}
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {member.address || 'Location available'}
-                      </p>
-                      {/* Skills/Equipment badges */}
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {member.skills?.slice(0, 2).map(skill => {
-                          const label = SKILL_OPTIONS.find(s => s.value === skill)?.label || skill
-                          return (
-                            <span
-                              key={skill}
-                              className="text-xs px-1.5 py-0.5 rounded bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                            >
-                              {label}
-                            </span>
-                          )
-                        })}
-                        {member.equipment?.slice(0, 2).map(equip => {
-                          const label = EQUIPMENT_OPTIONS.find(e => e.value === equip)?.label || equip
-                          return (
-                            <span
-                              key={equip}
-                              className="text-xs px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-                            >
-                              {label}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    {member.lat && member.lng && (
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${member.lat},${member.lng}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center gap-1 px-2 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium hover:bg-primary/20 transition-colors flex-shrink-0"
-                      >
-                        <Navigation className="h-3 w-3" />
-                        Directions
-                      </a>
-                    )}
-                  </div>
-                )
-              })}
+            <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
+              {filteredMembers.map(member => (
+                <MemberProfileCard
+                  key={member.id}
+                  member={{
+                    id: member.id,
+                    user_id: member.user_id,
+                    community_id: member.community_id,
+                    role: member.role,
+                    joined_at: member.joined_at,
+                    profile: member.profile,
+                  }}
+                  isCurrentUser={member.user_id === user?.id}
+                  isAdmin={isActiveCommunityAdmin}
+                />
+              ))}
             </div>
           )}
         </div>

@@ -23,6 +23,8 @@ import {
 } from '@/types/database'
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AddressAutocomplete, type AddressResult } from '@/components/maps/address-autocomplete'
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { NotificationSettings } from '@/components/notifications/notification-settings'
 
 type VisibilityKey =
   | 'personal_info'
@@ -481,6 +483,7 @@ export default function ProfilePage() {
 
   const sections = [
     { id: 'personal', label: 'Personal Information', icon: 'person' },
+    { id: 'notifications', label: 'Notifications', icon: 'notifications' },
     { id: 'household', label: 'Household Members', icon: 'family_restroom' },
     { id: 'emergency', label: 'Emergency Contact', icon: 'contact_phone' },
     { id: 'insurance', label: 'Insurance Details', icon: 'policy' },
@@ -656,6 +659,11 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Notifications */}
+          {activeSection === 'notifications' && (
+            <NotificationSettings />
           )}
 
           {/* Household Members */}

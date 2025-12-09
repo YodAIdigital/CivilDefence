@@ -338,15 +338,18 @@ Community: {{communityName}}
 Available Community Data:
 {{communityData}}
 
+{{ragContext}}
+
 User Question: {{userQuestion}}
 
 INSTRUCTIONS:
-1. Answer the user's question based ONLY on the community data provided above.
-2. If the data doesn't contain enough information to answer, say so clearly.
-3. Be concise but thorough in your answers.
-4. When discussing response plans (guides), reference specific sections and content if available.
-5. Format numbers clearly (e.g., "12 members" not "12").
-6. If asked about information that isn't in the data, explain what data is available instead.
+1. Answer the user's question based on the community data AND any relevant knowledge base information provided above.
+2. When knowledge base information is provided, incorporate it naturally into your response.
+3. If the data doesn't contain enough information to answer, say so clearly.
+4. Be concise but thorough in your answers.
+5. When discussing response plans (guides), reference specific sections and content if available.
+6. Format numbers clearly (e.g., "12 members" not "12").
+7. If asked about information that isn't in the data, explain what data is available instead.
 
 AVAILABLE DATA INCLUDES:
 - Community member count and member list (names, emails, roles)
@@ -354,6 +357,7 @@ AVAILABLE DATA INCLUDES:
 - Community location and meeting point information
 - Emergency response guides/plans with sections, supplies, and emergency contacts
 - Guide types (earthquake, fire, flood, etc.) and risk levels
+- Knowledge base documents with civil defence and emergency preparedness information
 
 Respond in a helpful, conversational tone. Use British English spelling.`,
   },

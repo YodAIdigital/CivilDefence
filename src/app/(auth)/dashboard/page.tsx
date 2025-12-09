@@ -7,6 +7,8 @@ import { WeatherWidget } from '@/components/weather/weather-widget'
 import { EventCalendar } from '@/components/calendar/event-calendar'
 import { PreparednessWidget } from '@/components/dashboard/preparedness-widget'
 import { PDFExportWidget } from '@/components/dashboard/pdf-export-widget'
+import { SendAlertModal } from '@/components/dashboard/send-alert-modal'
+import { CreateEventModal } from '@/components/dashboard/create-event-modal'
 import { CommunityLocationsWidget } from '@/components/maps/community-locations-widget'
 import { DashboardSOPWidget } from '@/components/sop/dashboard-sop-widget'
 import { useAuth } from '@/contexts/auth-context'
@@ -112,6 +114,10 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState(true)
   const hasInitialFetch = useRef(false)
 
+  // Modal states
+  const [showSendAlertModal, setShowSendAlertModal] = useState(false)
+  const [showCreateEventModal, setShowCreateEventModal] = useState(false)
+
   const fetchAlerts = useCallback(async () => {
     if (!user) {
       setIsLoading(false)
@@ -123,6 +129,17 @@ export default function DashboardPage() {
       // This respects the recipient_group filtering (admin, team, members, specific)
       console.log('=== DASHBOARD ALERTS DEBUG ===')
       console.log('Fetching alerts for user:', user.id)
+
+      // First, fetch acknowledged alert IDs from the database
+      const { data: acknowledgedAlerts } = await supabase
+        .from('alert_acknowledgments')
+        .select('alert_id')
+        .eq('user_id', user.id)
+
+      const acknowledgedAlertIds = new Set(
+        (acknowledgedAlerts || []).map(a => a.alert_id)
+      )
+      console.log('Acknowledged alerts from DB:', acknowledgedAlertIds.size)
 
       const { data: recipientAlerts, error: recipientError } = await supabase
         .from('alert_recipients')
@@ -181,10 +198,10 @@ export default function DashboardPage() {
       }
       console.log('=== END DASHBOARD ALERTS DEBUG ===')
 
-      // Filter out dismissed alerts
-      const dismissed = getDismissedAlerts()
+      // Filter out dismissed alerts (both from database AND localStorage for backwards compatibility)
+      const localDismissed = getDismissedAlerts()
       const activeAlerts: Alert[] = dbAlerts
-        .filter(alert => !dismissed.includes(alert.id))
+        .filter(alert => !acknowledgedAlertIds.has(alert.id) && !localDismissed.includes(alert.id))
         .map(alert => ({
           id: alert.id,
           type: mapAlertLevel(alert.level),
@@ -319,9 +336,15 @@ export default function DashboardPage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold">Alerts & Messages</h2>
-            <span className="text-sm text-muted-foreground">
-              {isLoading ? 'Loading...' : `${alerts.length} active`}
-            </span>
+            {activeCommunity && isActiveCommunityAdmin && (
+              <button
+                onClick={() => setShowSendAlertModal(true)}
+                className="flex items-center gap-2 rounded-lg bg-[#FEB100] px-4 py-2 text-sm font-medium text-white hover:bg-[#FEB100]/90 transition-colors"
+              >
+                <span className="material-icons text-lg">campaign</span>
+                Send Alert
+              </button>
+            )}
           </div>
 
           {isLoading ? (
@@ -393,7 +416,12 @@ export default function DashboardPage() {
           <WeatherWidget />
 
           {/* Community Events Calendar */}
-          <EventCalendar compact maxEvents={3} />
+          <EventCalendar
+            compact
+            maxEvents={3}
+            showCreateButton={!!(activeCommunity && isActiveCommunityAdmin)}
+            onCreateClick={() => setShowCreateEventModal(true)}
+          />
 
           {/* Preparedness Score Widget */}
           <PreparednessWidget />
@@ -407,6 +435,19 @@ export default function DashboardPage() {
           communityName={activeCommunity.name}
         />
       )}
+
+      {/* Send Alert Modal */}
+      <SendAlertModal
+        isOpen={showSendAlertModal}
+        onClose={() => setShowSendAlertModal(false)}
+        onSuccess={fetchAlerts}
+      />
+
+      {/* Create Event Modal */}
+      <CreateEventModal
+        isOpen={showCreateEventModal}
+        onClose={() => setShowCreateEventModal(false)}
+      />
     </div>
   )
 }

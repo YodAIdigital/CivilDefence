@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { MessageSquare, Send, Loader2, X, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
+import { MessageSquare, Send, Loader2, X, Sparkles, ChevronDown, ChevronUp, Phone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { supabase } from '@/lib/supabase/client'
+import { VoiceChat } from './voice-chat'
 
 interface Message {
   id: string
@@ -36,6 +37,7 @@ export function AIChat({ communityId, communityName }: AIChatProps) {
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showVoiceChat, setShowVoiceChat] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -125,6 +127,17 @@ export function AIChat({ communityId, communityName }: AIChatProps) {
 
   const handleExampleClick = (question: string) => {
     sendMessage(question)
+  }
+
+  // Show voice chat only when active
+  if (showVoiceChat) {
+    return (
+      <VoiceChat
+        communityId={communityId}
+        communityName={communityName}
+        onClose={() => setShowVoiceChat(false)}
+      />
+    )
   }
 
   if (!isOpen) {
@@ -258,6 +271,16 @@ export function AIChat({ communityId, communityName }: AIChatProps) {
           {/* Input */}
           <form onSubmit={handleSubmit} className="p-3 border-t">
             <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 flex-shrink-0"
+                onClick={() => setShowVoiceChat(true)}
+                title="Start voice conversation"
+              >
+                <Phone className="h-4 w-4" />
+              </Button>
               <Textarea
                 ref={textareaRef}
                 value={input}

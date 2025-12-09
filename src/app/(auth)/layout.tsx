@@ -35,6 +35,7 @@ const navItems: NavItem[] = [
 const adminNavItems: NavItem[] = [
   { href: '/admin/templates', icon: 'edit_note', label: 'Manage Templates' },
   { href: '/admin/ai-settings', icon: 'auto_awesome', label: 'AI Settings' },
+  { href: '/admin/training-documents', icon: 'school', label: 'Training Documents' },
 ]
 
 export default function AuthLayout({ children }: AuthLayoutProps) {
@@ -231,23 +232,41 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           {/* Community Manage Link - Only visible to community admins */}
           {activeCommunity && isActiveCommunityAdmin && (() => {
             const manageHref = `/community/${activeCommunity.id}/manage`
+            const settingsHref = `/community/${activeCommunity.id}/settings`
             const isManageActive = pathname === manageHref
+            const isSettingsActive = pathname === settingsHref
 
             return (
-              <Link
-                href={manageHref as Route}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isManageActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }`}
-              >
-                <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
-                  groups
-                </span>
-                Community
-              </Link>
+              <>
+                <Link
+                  href={manageHref as Route}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isManageActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
+                    groups
+                  </span>
+                  Community
+                </Link>
+                <Link
+                  href={settingsHref as Route}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isSettingsActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  <span className={`material-icons-outlined text-xl ${isSettingsActive ? '' : 'opacity-70'}`}>
+                    settings
+                  </span>
+                  Settings
+                </Link>
+              </>
             )
           })()}
 
@@ -448,30 +467,56 @@ export default function AuthLayout({ children }: AuthLayoutProps) {
           {/* Community - Only visible to community admins */}
           {activeCommunity && isActiveCommunityAdmin && (() => {
             const manageHref = `/community/${activeCommunity.id}/manage`
+            const settingsHref = `/community/${activeCommunity.id}/settings`
             const isManageActive = pathname === manageHref
+            const isSettingsActive = pathname === settingsHref
 
             return (
-              <Link
-                href={manageHref as Route}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-                  isManageActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                } ${isCollapsed ? 'justify-center px-0' : ''}`}
-                title={isCollapsed ? 'Community' : undefined}
-              >
-                <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
-                  groups
-                </span>
-                {!isCollapsed && (
-                  <>
-                    Community
-                    {isManageActive && (
-                      <span className="material-icons ml-auto text-lg">arrow_forward</span>
-                    )}
-                  </>
-                )}
-              </Link>
+              <>
+                <Link
+                  href={manageHref as Route}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isManageActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  } ${isCollapsed ? 'justify-center px-0' : ''}`}
+                  title={isCollapsed ? 'Community' : undefined}
+                >
+                  <span className={`material-icons-outlined text-xl ${isManageActive ? '' : 'opacity-70'}`}>
+                    groups
+                  </span>
+                  {!isCollapsed && (
+                    <>
+                      Community
+                      {isManageActive && (
+                        <span className="material-icons ml-auto text-lg">arrow_forward</span>
+                      )}
+                    </>
+                  )}
+                </Link>
+                {/* Settings - as a primary nav item */}
+                <Link
+                  href={settingsHref as Route}
+                  className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+                    isSettingsActive
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                  } ${isCollapsed ? 'justify-center px-0' : ''}`}
+                  title={isCollapsed ? 'Settings' : undefined}
+                >
+                  <span className={`material-icons-outlined text-xl ${isSettingsActive ? '' : 'opacity-70'}`}>
+                    settings
+                  </span>
+                  {!isCollapsed && (
+                    <>
+                      Settings
+                      {isSettingsActive && (
+                        <span className="material-icons ml-auto text-lg">arrow_forward</span>
+                      )}
+                    </>
+                  )}
+                </Link>
+              </>
             )
           })()}
 

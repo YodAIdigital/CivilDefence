@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { sendEmail, getCommunityInvitationEmail } from '@/lib/email'
 
-// Create admin supabase client for server-side operations
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_KEY!
-)
+// Lazy-initialized admin supabase client for server-side operations
+let supabaseAdmin: SupabaseClient | null = null
+
+function getSupabaseAdmin(): SupabaseClient {
+  if (!supabaseAdmin) {
+    supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_KEY!
+    )
+  }
+  return supabaseAdmin
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch community details
-    const { data: community, error: communityError } = await supabaseAdmin
+    const { data: community, error: communityError } = await getSupabaseAdmin()
       .from('communities')
       .select('name')
       .eq('id', communityId)
@@ -35,7 +42,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Fetch inviter details
-    const { data: inviter, error: inviterError } = await supabaseAdmin
+    const { data: inviter, error: inviterError } = await getSupabaseAdmin()
       .from('profiles')
       .select('full_name, email')
       .eq('id', invitedBy)

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { createClient } from '@supabase/supabase-js'
 import { getPromptConfigByType, DEFAULT_PROMPTS } from '@/lib/ai-prompts'
+import { retrieve, formatRetrievalContext, logQuery } from '@/lib/rag/retriever'
+import { rerankWithFallback, isRerankingAvailable } from '@/lib/rag/reranker'
 
 interface ChatRequest {
   community_id: string
@@ -236,15 +238,44 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Retrieve relevant RAG context
+    let ragContext = ''
+    let ragResults: { chunkId: string; score: number }[] = []
+    try {
+      // Perform hybrid search on the knowledge base
+      let results = await retrieve(message, {
+        topK: isRerankingAvailable() ? 10 : 5, // Get more for reranking
+        useHybridSearch: true,
+      })
+
+      // Apply reranking for better relevance
+      if (results.length > 0) {
+        results = await rerankWithFallback(message, results, { topK: 5 })
+      }
+
+      // Store results for logging
+      ragResults = results.map(r => ({ chunkId: r.chunkId, score: r.score }))
+
+      // Format context for the prompt
+      if (results.length > 0) {
+        ragContext = formatRetrievalContext(results)
+        console.log('[community-chat] RAG context retrieved:', results.length, 'chunks')
+      }
+    } catch (ragError) {
+      // Don't fail the request if RAG fails, just proceed without context
+      console.error('[community-chat] RAG retrieval error (continuing without):', ragError)
+    }
+
     // Get prompt configuration
     const promptConfig = await getPromptConfigByType('community_chat')
     const promptTemplate = promptConfig?.prompt_template || DEFAULT_PROMPTS.community_chat.prompt_template
     const modelId = promptConfig?.model_id || DEFAULT_PROMPTS.community_chat.model_id
 
-    // Build the prompt with community data
+    // Build the prompt with community data and RAG context
     const prompt = promptTemplate
       .replace(/\{\{communityName\}\}/g, communityData.name)
       .replace(/\{\{communityData\}\}/g, JSON.stringify(communityData, null, 2))
+      .replace(/\{\{ragContext\}\}/g, ragContext)
       .replace(/\{\{userQuestion\}\}/g, message)
 
     console.log('[community-chat] Model:', modelId)
@@ -255,6 +286,7 @@ export async function POST(request: NextRequest) {
       roles: communityData.summary.roles,
       guides: communityData.guides.length
     })
+    console.log('[community-chat] RAG chunks used:', ragResults.length)
 
     // Initialize Gemini
     const genAI = new GoogleGenerativeAI(apiKey)
@@ -281,9 +313,28 @@ export async function POST(request: NextRequest) {
       console.error('[community-chat] Failed to log chat history:', historyError)
     }
 
+    // Log RAG query for analytics (if we used RAG)
+    if (ragResults.length > 0) {
+      try {
+        await logQuery(
+          user.id,
+          community_id,
+          message,
+          ragResults.map(r => r.chunkId),
+          ragResults.map(r => r.score),
+          modelId,
+          aiResponse
+        )
+      } catch (logError) {
+        // Don't fail the request if logging fails
+        console.error('[community-chat] Failed to log RAG query:', logError)
+      }
+    }
+
     return NextResponse.json({
       response: aiResponse,
-      model_used: modelId
+      model_used: modelId,
+      rag_chunks_used: ragResults.length
     })
 
   } catch (error) {

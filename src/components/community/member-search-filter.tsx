@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Search, Filter, X, ChevronDown, User, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { Profile, CommunityRole, ProfileExtended, CommunityGroup } from '@/types/database'
@@ -150,8 +150,15 @@ export function MemberSearchFilter({
   }, [members, filters, groupMembers])
 
   // Update parent component when filtered members change
+  // Use a ref to track previous IDs to avoid unnecessary updates
+  const prevFilteredIdsRef = useRef<string>('')
+
   useEffect(() => {
-    onFilteredMembersChange(filteredMembers)
+    const currentIds = filteredMembers.map(m => m.id).join(',')
+    if (currentIds !== prevFilteredIdsRef.current) {
+      prevFilteredIdsRef.current = currentIds
+      onFilteredMembersChange(filteredMembers)
+    }
   }, [filteredMembers, onFilteredMembersChange])
 
   const handleSearchChange = (value: string) => {

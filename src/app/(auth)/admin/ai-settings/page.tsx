@@ -81,6 +81,7 @@ const FUNCTION_VARIABLES: Record<string, { name: string; description: string }[]
   community_chat: [
     { name: 'communityName', description: 'Name of the community' },
     { name: 'communityData', description: 'JSON summary of community data (members, households, guides, etc.)' },
+    { name: 'ragContext', description: 'Retrieved knowledge base context from training documents (auto-populated)' },
     { name: 'userQuestion', description: 'The user question being asked' },
   ],
   sop_generation: [
