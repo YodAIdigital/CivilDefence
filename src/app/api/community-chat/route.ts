@@ -10,6 +10,12 @@ interface ChatRequest {
   message: string
 }
 
+interface HouseholdMemberData {
+  name: string
+  relationship: string
+  disabilities?: string[]
+}
+
 interface MemberData {
   id: string
   full_name: string | null
@@ -17,6 +23,15 @@ interface MemberData {
   role: string
   phone: string | null
   location: string | null
+  address: string | null
+  skills: string[]
+  disabilities: string[]
+  equipment: string[]
+  has_backup_power: boolean
+  has_backup_water: boolean
+  has_food_supply: boolean
+  household_members: HouseholdMemberData[]
+  general_comments: string | null
 }
 
 interface GuideData {
@@ -38,9 +53,17 @@ interface CommunityData {
   member_count: number
   members: MemberData[]
   guides: GuideData[]
+  groups: { name: string; member_count: number }[]
   summary: {
     total_members: number
+    total_households: number
     roles: { role: string; count: number }[]
+    skills_summary: { skill: string; count: number }[]
+    equipment_summary: { equipment: string; count: number }[]
+    needs_assistance: number
+    has_backup_power: number
+    has_backup_water: number
+    has_food_supply: number
   }
 }
 
@@ -64,7 +87,7 @@ async function buildCommunityDataContext(
     return null
   }
 
-  // Fetch community members with their profiles (only columns that exist in the database)
+  // Fetch community members with their profiles including notification_preferences (extended data)
   const { data: members, error: membersError } = await supabase
     .from('community_members')
     .select(`
@@ -76,7 +99,8 @@ async function buildCommunityDataContext(
         full_name,
         email,
         phone,
-        location
+        location,
+        notification_preferences
       )
     `)
     .eq('community_id', communityId)
@@ -97,26 +121,87 @@ async function buildCommunityDataContext(
     console.error('[community-chat] Failed to fetch guides:', guidesError)
   }
 
+  // Fetch community groups
+  const { data: groups, error: groupsError } = await supabase
+    .from('community_groups')
+    .select('name, member_count')
+    .eq('community_id', communityId)
+    .eq('is_active', true)
+
+  if (groupsError) {
+    console.error('[community-chat] Failed to fetch groups:', groupsError)
+  }
+
   // Process member data - handle Supabase join response format
+  // Extended profile data is stored in notification_preferences JSON field
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const processedMembers: MemberData[] = ((members || []) as any[]).map((m): MemberData => {
     // Supabase returns joined data as an object or array depending on the relationship
     const profile = Array.isArray(m.profiles) ? m.profiles[0] : m.profiles
+
+    // Extended data is stored in notification_preferences JSON
+    const extendedData = profile?.notification_preferences || {}
 
     return {
       id: profile?.id || m.user_id,
       full_name: profile?.full_name || null,
       email: profile?.email || '',
       role: m.role as string,
-      phone: profile?.phone || null,
-      location: profile?.location || null
+      phone: profile?.phone || extendedData.mobile_number || null,
+      location: profile?.location || null,
+      address: extendedData.address || null,
+      skills: extendedData.skills || [],
+      disabilities: extendedData.disabilities || [],
+      equipment: extendedData.equipment || [],
+      has_backup_power: extendedData.has_backup_power || false,
+      has_backup_water: extendedData.has_backup_water || false,
+      has_food_supply: extendedData.has_food_supply || false,
+      household_members: (extendedData.household_members || []).map((hm: { name?: string; relationship?: string; disabilities?: string[] }) => ({
+        name: hm.name || 'Unknown',
+        relationship: hm.relationship || 'Unknown',
+        disabilities: hm.disabilities || []
+      })),
+      general_comments: extendedData.general_comments || null
     }
   })
 
-  // Calculate role counts
+  // Calculate summary statistics
   const roleCounts: Record<string, number> = {}
+  const skillCounts: Record<string, number> = {}
+  const equipmentCounts: Record<string, number> = {}
+  let needsAssistanceCount = 0
+  let backupPowerCount = 0
+  let backupWaterCount = 0
+  let foodSupplyCount = 0
+  let totalHouseholds = 0
+
   for (const member of processedMembers) {
+    // Role counts
     roleCounts[member.role] = (roleCounts[member.role] || 0) + 1
+
+    // Skills counts
+    for (const skill of member.skills) {
+      skillCounts[skill] = (skillCounts[skill] || 0) + 1
+    }
+
+    // Equipment counts
+    for (const equip of member.equipment) {
+      equipmentCounts[equip] = (equipmentCounts[equip] || 0) + 1
+    }
+
+    // Count members who need assistance (have disabilities or household members with disabilities)
+    const householdDisabilities = member.household_members.flatMap(hm => hm.disabilities || [])
+    if (member.disabilities.length > 0 || householdDisabilities.length > 0) {
+      needsAssistanceCount++
+    }
+
+    // Preparedness counts
+    if (member.has_backup_power) backupPowerCount++
+    if (member.has_backup_water) backupWaterCount++
+    if (member.has_food_supply) foodSupplyCount++
+
+    // Household count (1 per member + their household members)
+    totalHouseholds += 1 + member.household_members.length
   }
 
   // Process guides - use any to avoid complex typing
@@ -132,6 +217,13 @@ async function buildCommunityDataContext(
     emergency_contacts: g.emergency_contacts
   }))
 
+  // Process groups
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const processedGroups = ((groups || []) as any[]).map(g => ({
+    name: g.name as string,
+    member_count: g.member_count as number
+  }))
+
   const communityData: CommunityData = {
     name: community.name as string,
     location: community.location as string | null,
@@ -140,9 +232,17 @@ async function buildCommunityDataContext(
     member_count: community.member_count as number,
     members: processedMembers,
     guides: processedGuides,
+    groups: processedGroups,
     summary: {
       total_members: processedMembers.length,
-      roles: Object.entries(roleCounts).map(([role, count]) => ({ role, count }))
+      total_households: totalHouseholds,
+      roles: Object.entries(roleCounts).map(([role, count]) => ({ role, count })),
+      skills_summary: Object.entries(skillCounts).map(([skill, count]) => ({ skill, count })),
+      equipment_summary: Object.entries(equipmentCounts).map(([equipment, count]) => ({ equipment, count })),
+      needs_assistance: needsAssistanceCount,
+      has_backup_power: backupPowerCount,
+      has_backup_water: backupWaterCount,
+      has_food_supply: foodSupplyCount
     }
   }
 
@@ -283,8 +383,13 @@ export async function POST(request: NextRequest) {
     console.log('[community-chat] User question:', message)
     console.log('[community-chat] Community data summary:', {
       total_members: communityData.summary.total_members,
+      total_households: communityData.summary.total_households,
       roles: communityData.summary.roles,
-      guides: communityData.guides.length
+      skills: communityData.summary.skills_summary,
+      equipment: communityData.summary.equipment_summary,
+      needs_assistance: communityData.summary.needs_assistance,
+      guides: communityData.guides.length,
+      groups: communityData.groups.length
     })
     console.log('[community-chat] RAG chunks used:', ragResults.length)
 
