@@ -1538,6 +1538,7 @@ export const EVENT_TYPE_CONFIG = {
     color: 'bg-gradient-to-br from-slate-600 to-slate-700',
     bgColor: 'bg-slate-100 dark:bg-slate-900',
     textColor: 'text-slate-600 dark:text-slate-400',
+    borderColor: 'border-slate-500',
   },
   training: {
     label: 'Training',
@@ -1545,6 +1546,7 @@ export const EVENT_TYPE_CONFIG = {
     color: 'bg-gradient-to-br from-[#000542] to-[#313A64]',
     bgColor: 'bg-blue-100 dark:bg-blue-900',
     textColor: 'text-blue-600 dark:text-blue-400',
+    borderColor: 'border-blue-600',
   },
   drill: {
     label: 'Emergency Drill',
@@ -1552,6 +1554,7 @@ export const EVENT_TYPE_CONFIG = {
     color: 'bg-gradient-to-br from-orange-500 to-red-500',
     bgColor: 'bg-orange-100 dark:bg-orange-900',
     textColor: 'text-orange-600 dark:text-orange-400',
+    borderColor: 'border-orange-500',
   },
   meeting: {
     label: 'Meeting',
@@ -1559,6 +1562,7 @@ export const EVENT_TYPE_CONFIG = {
     color: 'bg-gradient-to-br from-[#FEB100] to-amber-500',
     bgColor: 'bg-amber-100 dark:bg-amber-900',
     textColor: 'text-amber-600 dark:text-amber-400',
+    borderColor: 'border-amber-500',
   },
   social: {
     label: 'Social Event',
@@ -1566,6 +1570,7 @@ export const EVENT_TYPE_CONFIG = {
     color: 'bg-gradient-to-br from-green-500 to-emerald-600',
     bgColor: 'bg-green-100 dark:bg-green-900',
     textColor: 'text-green-600 dark:text-green-400',
+    borderColor: 'border-green-500',
   },
 } as const
 

@@ -242,18 +242,18 @@ export function EventCalendar({ showHeader = true, maxEvents = 5, compact = fals
         ) : (
           <div className="space-y-3">
             {events.slice(0, maxEvents).map(event => {
-              const config = EVENT_TYPE_CONFIG[event.event_type]
+              const config = EVENT_TYPE_CONFIG[event.event_type] || EVENT_TYPE_CONFIG.general
               return (
                 <div
                   key={event.id}
-                  className={`rounded-xl ${config.color} p-3 text-white shadow-sm`}
+                  className={`rounded-xl p-3 shadow-sm border-l-4 ${config.bgColor} ${config.borderColor}`}
                 >
-                  <div className="flex items-center gap-2 text-xs text-white/80">
+                  <div className={`flex items-center gap-2 text-xs ${config.textColor}`}>
                     <span className="material-icons-outlined text-sm">schedule</span>
                     {formatEventTime(event.start_time, event.duration_minutes, event.all_day)}
                   </div>
-                  <h4 className="mt-1 text-sm font-semibold">{event.title}</h4>
-                  <p className="mt-0.5 text-xs text-white/70 line-clamp-1">
+                  <h4 className="mt-1 text-sm font-semibold text-foreground">{event.title}</h4>
+                  <p className="mt-0.5 text-xs text-muted-foreground line-clamp-1">
                     {event.community?.name}
                   </p>
                 </div>
